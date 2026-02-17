@@ -1,3 +1,5 @@
+# app/schemas/lineup.py
+
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
@@ -6,12 +8,15 @@ from datetime import datetime
 class LineupBase(BaseModel):
     match_id: int
     team_id: int
+    formation: Optional[str] = None
+    coach_id: Optional[int] = None
+    coach_name: Optional[str] = None
     player_id: int
     player_name: str
-    number: Optional[int] = None  # NICHT player_number
-    position: Optional[str] = None  # NICHT player_position
-    grid: Optional[str] = None  # NICHT player_grid
-    starter: bool = True  # NICHT is_substitute
+    number: Optional[int] = None
+    position: Optional[str] = None
+    grid: Optional[str] = None
+    is_substitute: bool = False
 
 
 class LineupCreate(LineupBase):
@@ -22,7 +27,7 @@ class LineupUpdate(BaseModel):
     number: Optional[int] = None
     position: Optional[str] = None
     grid: Optional[str] = None
-    starter: Optional[bool] = None
+    is_substitute: Optional[bool] = None
 
 
 class LineupResponse(LineupBase):

@@ -1,3 +1,5 @@
+# app/schemas/match_statistic.py
+
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
@@ -50,6 +52,6 @@ class MatchStatisticUpdate(BaseModel):
 class MatchStatisticResponse(MatchStatisticBase):
     id: int
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None  # ← GEÄNDERT: Optional!
 
     model_config = ConfigDict(from_attributes=True)

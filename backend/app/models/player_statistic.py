@@ -1,6 +1,4 @@
-"""
-SQLAlchemy Model für Player Statistics.
-"""
+# app/models/player_statistic.py
 
 from sqlalchemy import (
     Column,
@@ -35,12 +33,15 @@ class PlayerStatistic(Base):
     player_photo = Column(String(255))
 
     # Game Info
-    minutes = Column(Integer)
+    minutes_played = Column(Integer)  # ← GEÄNDERT
     number = Column(Integer)
     position = Column(String(10))
     rating = Column(DECIMAL(3, 1))
     captain = Column(Boolean, default=False)
     substitute = Column(Boolean, default=False)
+
+    # Offsides
+    offsides = Column(Integer)  # ← NEU
 
     # Shots
     shots_total = Column(Integer)
@@ -49,8 +50,8 @@ class PlayerStatistic(Base):
     # Goals
     goals_total = Column(Integer)
     goals_conceded = Column(Integer)
-    assists = Column(Integer)
-    saves = Column(Integer)
+    goals_assists = Column(Integer)  # ← GEÄNDERT (war "assists")
+    goals_saves = Column(Integer)  # ← GEÄNDERT (war "saves")
 
     # Passes
     passes_total = Column(Integer)
@@ -87,6 +88,7 @@ class PlayerStatistic(Base):
     penalty_saved = Column(Integer)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())  # ← NEU
 
     # Relationships
     match = relationship("Match", backref="player_statistics")

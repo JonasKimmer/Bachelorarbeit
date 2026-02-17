@@ -1,6 +1,4 @@
-"""
-SQLAlchemy Model für Match Statistics.
-"""
+# app/models/match_statistic.py
 
 from sqlalchemy import Column, Integer, ForeignKey, DateTime, func, UniqueConstraint
 from sqlalchemy.orm import relationship
@@ -23,14 +21,14 @@ class MatchStatistic(Base):
     shots_off_goal = Column(Integer)
     total_shots = Column(Integer)
     blocked_shots = Column(Integer)
-    shots_inside_box = Column(Integer)
-    shots_outside_box = Column(Integer)
+    shots_insidebox = Column(Integer)  # ← KORRIGIERT
+    shots_outsidebox = Column(Integer)  # ← KORRIGIERT
 
     # Spielfluss
     fouls = Column(Integer)
     corner_kicks = Column(Integer)
     offsides = Column(Integer)
-    ball_possession = Column(Integer)  # Prozent
+    ball_possession = Column(Integer)
 
     # Karten
     yellow_cards = Column(Integer)
@@ -40,9 +38,10 @@ class MatchStatistic(Base):
     goalkeeper_saves = Column(Integer)
     total_passes = Column(Integer)
     passes_accurate = Column(Integer)
-    passes_percent = Column(Integer)
+    passes_percentage = Column(Integer)  # ← KORRIGIERT
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())  # ← NEU
 
     # Relationships
     match = relationship("Match", backref="statistics")

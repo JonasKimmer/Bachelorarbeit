@@ -1,3 +1,5 @@
+# app/schemas/player_statistic.py
+
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
@@ -9,6 +11,8 @@ class PlayerStatisticBase(BaseModel):
     team_id: int
     player_name: str
     minutes_played: Optional[int] = None
+    number: Optional[int] = None  # ← NEU
+    position: Optional[str] = None  # ← NEU
     rating: Optional[float] = None
     captain: bool = False
     substitute: bool = False
@@ -47,6 +51,8 @@ class PlayerStatisticCreate(PlayerStatisticBase):
 
 class PlayerStatisticUpdate(BaseModel):
     minutes_played: Optional[int] = None
+    number: Optional[int] = None
+    position: Optional[str] = None
     rating: Optional[float] = None
     captain: Optional[bool] = None
     substitute: Optional[bool] = None
@@ -82,6 +88,6 @@ class PlayerStatisticUpdate(BaseModel):
 class PlayerStatisticResponse(PlayerStatisticBase):
     id: int
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None  # ← Optional!
 
     model_config = ConfigDict(from_attributes=True)

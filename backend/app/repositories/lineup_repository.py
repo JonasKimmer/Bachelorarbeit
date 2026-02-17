@@ -1,4 +1,6 @@
-from sqlalchemy.orm import Session
+# app/repositories/lineup_repository.py
+
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from app.models.lineup import Lineup
 from app.schemas.lineup import LineupCreate, LineupUpdate
@@ -15,30 +17,37 @@ class LineupRepository:
         return self.db.query(Lineup).filter(Lineup.id == lineup_id).first()
 
     def get_by_match(self, match_id: int) -> List[Lineup]:
-        return self.db.query(Lineup).filter(Lineup.match_id == match_id).all()
+        """Alle Spieler (Starter + Ersatz) für ein Match."""
+        return (
+            self.db.query(Lineup)
+            .options(joinedload(Lineup.team))
+            .filter(Lineup.match_id == match_id)
+            .order_by(Lineup.team_id, Lineup.is_substitute, Lineup.grid)
+            .all()
+        )
+
+    def get_starters_by_match(self, match_id: int) -> List[Lineup]:
+        """Nur Startelf."""
+        return (
+            self.db.query(Lineup)
+            .options(joinedload(Lineup.team))
+            .filter(Lineup.match_id == match_id, Lineup.is_substitute == False)
+            .order_by(Lineup.team_id, Lineup.grid)
+            .all()
+        )
+
+    def get_substitutes_by_match(self, match_id: int) -> List[Lineup]:
+        """Nur Ersatzbank."""
+        return (
+            self.db.query(Lineup)
+            .options(joinedload(Lineup.team))
+            .filter(Lineup.match_id == match_id, Lineup.is_substitute == True)
+            .order_by(Lineup.team_id, Lineup.number)
+            .all()
+        )
 
     def get_by_team(self, team_id: int) -> List[Lineup]:
         return self.db.query(Lineup).filter(Lineup.team_id == team_id).all()
-
-
-def get_starters_by_match(self, match_id: int) -> List[Lineup]:
-    return (
-        self.db.query(Lineup)
-        .filter(
-            Lineup.match_id == match_id, not Lineup.is_substitute
-        )  # OHNE not = Substitutes!
-        .all()
-    )
-
-
-def get_substitutes_by_match(self, match_id: int) -> List[Lineup]:
-    return (
-        self.db.query(Lineup)
-        .filter(
-            Lineup.match_id == match_id, Lineup.is_substitute
-        )  # MIT is_substitute = Bank
-        .all()
-    )
 
     def create(self, lineup_data: LineupCreate) -> Lineup:
         lineup = Lineup(**lineup_data.model_dump())
@@ -64,7 +73,6 @@ def get_substitutes_by_match(self, match_id: int) -> List[Lineup]:
         lineup = self.get_by_id(lineup_id)
         if not lineup:
             return False
-
         self.db.delete(lineup)
         self.db.commit()
         return True
