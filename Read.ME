@@ -203,13 +203,17 @@ n8n Workflow: "Import Events" ausführen
 ### 3. Frontend verwenden
 ```
 1. http://localhost:3000 öffnen
-2. Liga auswählen (z.B. Bundesliga 2025)
-3. Spieltag auswählen
-4. Match auswählen
-5. Events werden angezeigt
-6. Ticker generieren:
+2. Tab auswählen:
+   - "📋 Ligen" - Ligenverwaltung
+   - "🏆 Liveticker" - Live-Spielverfolgung
+   - "⭐ Favoriten" - Gespeicherte Favoriten
+3. Liga auswählen (z.B. Bundesliga)
+4. Saison und Liga-Saison-Kombination auswählen
+5. Spieltag auswählen
+6. Match auswählen → Events werden angezeigt
+7. Ticker generieren:
    - Klick auf "📝 Neutral" / "🎉 Euphorisch" / "🔍 Kritisch"
-   - KI generiert Ticker-Text
+   - Claude AI generiert Ticker-Text in gewähltem Stil
    - Text wird angezeigt
 ```
 
@@ -222,18 +226,31 @@ Bachelorarbeit/
 │   ├── app/
 │   │   ├── api/v1/          # API Endpoints
 │   │   │   ├── events.py
+│   │   │   ├── favorites.py
+│   │   │   ├── league_seasons.py    # NEU: Liga-Saison-Kombinationen
+│   │   │   ├── leagues.py
+│   │   │   ├── lineups.py
+│   │   │   ├── match_statistics.py
 │   │   │   ├── matches.py
+│   │   │   ├── player_statistics.py
+│   │   │   ├── seasons.py            # NEU: Saisons
 │   │   │   ├── teams.py
-│   │   │   ├── ticker_entries.py
-│   │   │   └── leagues.py
+│   │   │   └── ticker_entries.py
 │   │   ├── core/            # Config & DB
 │   │   │   ├── config.py
 │   │   │   └── database.py
 │   │   ├── models/          # SQLAlchemy Models
-│   │   │   ├── team.py
-│   │   │   ├── match.py
 │   │   │   ├── event.py
-│   │   │   └── ticker_entry.py
+│   │   │   ├── league.py                # NEU: separate Liga
+│   │   │   ├── league_season.py         # NEU: Liga-Saison Junction
+│   │   │   ├── lineup.py                # NEU: Aufstellungen
+│   │   │   ├── match.py
+│   │   │   ├── match_statistic.py       # NEU: Match-Statistiken
+│   │   │   ├── player_statistic.py      # NEU: Spieler-Statistiken
+│   │   │   ├── season.py                # NEU: Saisons
+│   │   │   ├── team.py
+│   │   │   ├── ticker_entry.py
+│   │   │   └── user_favorite.py         # NEU: Favoriten
 │   │   ├── repositories/    # Data Access Layer
 │   │   ├── schemas/         # Pydantic Schemas
 │   │   ├── services/        # Business Logic
@@ -243,15 +260,18 @@ Bachelorarbeit/
 │   └── .env
 ├── frontend/
 │   ├── src/
-│   │   ├── LiveTicker.js    # Hauptkomponente
+│   │   ├── LiveTicker.js     # Hauptkomponente mit Tabs
 │   │   ├── LiveTicker.css
 │   │   ├── App.js
-│   │   └── index.js
+│   │   ├── index.js
+│   │   └── components/       # Wiederverwendbare Komponenten
 │   ├── package.json
 │   └── public/
 ├── n8n-workflows/
 │   ├── import-teams.json
 │   ├── import-matches.json
+│   ├── import-seasons.json         # NEU
+│   ├── import-league-seasons.json  # NEU
 │   └── live-events.json
 └── README.md
 ```
@@ -288,29 +308,46 @@ ANTHROPIC_MODEL=claude-sonnet-4-20250514  # Empfohlen
 
 ## 📊 Datenbank-Schema
 
-### Teams
+Die Datenbank verwendet ein **normalisiertes Modell** mit separaten Tabellen für Ligen, Saisons und deren Verknüpfung.
+
+### Leagues (Ligen)
+```sql
+id, external_id, name, country, logo_url, type, created_at, updated_at
+```
+
+### Seasons (Saisons)
+```sql
+id, year, start_date, end_date, current, created_at
+```
+
+### League Seasons (Liga-Saison-Kombinationen)
+```sql
+id, league_id (FK), season_id (FK), current_round, total_rounds
+```
+*Junktioniert Ligen und Saisons (z.B. Bundesliga 2025)*
+
+### Matches (Spiele)
+```sql
+id, external_id, league_season_id (FK), home_team_id (FK), away_team_id (FK),
+match_date, status, round, score_home, score_away, created_at, updated_at
+```
+*Verwendet `league_season_id` statt separate league/season Felder*
+
+### Teams (Mannschaften)
 ```sql
 id, external_id, name, code, logo_url, country, founded, 
 venue_name, venue_capacity, created_at, updated_at
 ```
 
-### Matches
+### Events (Spielereignisse)
 ```sql
-id, external_id, home_team_id, away_team_id, match_date, 
-status, league_id, league_name, season, round, 
-score_home, score_away, created_at, updated_at
+id, match_id (FK), minute, extra_time, team_id (FK), player_id, 
+player_name, assist_id, assist_name, type, detail, comments, created_at
 ```
 
-### Events
+### Ticker Entries (Ticker-Texte)
 ```sql
-id, match_id, minute, extra_time, team_id, player_id, 
-player_name, assist_id, assist_name, type, detail, 
-comments, created_at
-```
-
-### Ticker Entries
-```sql
-id, event_id, text, style, llm_model, created_at
+id, event_id (FK), text, style, llm_model, created_at
 ```
 
 ---
@@ -354,39 +391,72 @@ curl http://localhost:8000/health
 
 ## 📝 API-Endpunkte
 
-### Teams
+### Leagues (Ligen)
 ```
-GET    /api/v1/teams           - Alle Teams
-GET    /api/v1/teams/{id}      - Team nach ID
-POST   /api/v1/teams           - Team erstellen
-```
-
-### Matches
-```
-GET    /api/v1/matches                    - Alle Matches
-GET    /api/v1/matches?league_id=78       - Matches einer Liga
-GET    /api/v1/matches/{id}               - Match nach ID
-POST   /api/v1/matches                    - Match erstellen
-PATCH  /api/v1/matches/{id}               - Match aktualisieren
+GET    /api/v1/leagues/                       - Alle Ligen
+GET    /api/v1/leagues/{league_id}            - Liga nach ID
+GET    /api/v1/leagues/{league_id}/seasons    - Alle Saisons einer Liga
+POST   /api/v1/leagues/                       - Liga erstellen
+PATCH  /api/v1/leagues/{league_id}            - Liga aktualisieren
+DELETE /api/v1/leagues/{league_id}            - Liga löschen
 ```
 
-### Events
+### Seasons (Saisons)
 ```
-GET    /api/v1/events                     - Alle Events
-GET    /api/v1/events?match_id=5          - Events eines Matches
-GET    /api/v1/events/{id}                - Event nach ID
-POST   /api/v1/events                     - Event erstellen
-```
-
-### Ticker
-```
-GET    /api/v1/ticker/match/{match_id}    - Ticker eines Matches
-POST   /api/v1/ticker/generate/{event_id}?style=neutral - Ticker generieren
+GET    /api/v1/seasons/                  - Alle Saisons
+GET    /api/v1/seasons/{season_id}       - Saison nach ID
+POST   /api/v1/seasons/                  - Saison erstellen
+PATCH  /api/v1/seasons/{season_id}       - Saison aktualisieren
 ```
 
-### Leagues
+### League Seasons (Liga-Saison-Kombinationen)
 ```
-GET    /api/v1/leagues                    - Alle Ligen
+GET    /api/v1/league-seasons/                           - Alle Liga-Saison-Kombinationen
+GET    /api/v1/league-seasons/{league_season_id}         - Kombination nach ID
+GET    /api/v1/league-seasons/{league_season_id}/matches - Matches einer Liga-Saison
+GET    /api/v1/league-seasons/{league_season_id}/rounds  - Alle Spieltage einer Liga-Saison
+POST   /api/v1/league-seasons/                           - Kombination erstellen
+PATCH  /api/v1/league-seasons/{league_season_id}         - Kombination aktualisieren
+```
+
+### Teams (Mannschaften)
+```
+GET    /api/v1/teams/                - Alle Teams
+GET    /api/v1/teams/{id}            - Team nach ID
+POST   /api/v1/teams/                - Team erstellen
+PATCH  /api/v1/teams/{id}            - Team aktualisieren
+```
+
+### Matches (Spiele)
+```
+GET    /api/v1/matches/                            - Alle Matches
+GET    /api/v1/matches/{id}                        - Match nach ID
+GET    /api/v1/matches?league_season_id=X          - Matches einer Liga-Saison
+GET    /api/v1/matches?team_id=X                   - Matches eines Teams
+GET    /api/v1/matches?league_season_id=X&round=X  - Matches eines Spieltags
+POST   /api/v1/matches/                            - Match erstellen
+PATCH  /api/v1/matches/{id}                        - Match aktualisieren
+```
+
+### Events (Spielereignisse)
+```
+GET    /api/v1/events/                     - Alle Events
+GET    /api/v1/events/{id}                 - Event nach ID
+GET    /api/v1/events?match_id=X           - Events eines Matches
+POST   /api/v1/events/                     - Event erstellen
+PATCH  /api/v1/events/{id}                 - Event aktualisieren
+DELETE /api/v1/events/{id}                 - Event löschen
+```
+
+### Ticker Entries (Ticker-Texte)
+```
+GET    /api/v1/ticker-entries/                    - Alle Ticker-Einträge
+GET    /api/v1/ticker-entries/{id}                - Eintrag nach ID
+GET    /api/v1/ticker-entries?match_id=X          - Ticker eines Matches
+POST   /api/v1/ticker-entries/generate/{event_id} - Ticker-Text generieren
+       Query: ?style=neutral|euphorisch|kritisch
+POST   /api/v1/ticker-entries/                    - Ticker-Eintrag erstellen
+PATCH  /api/v1/ticker-entries/{id}                - Ticker-Eintrag aktualisieren
 ```
 
 ---

@@ -15,6 +15,9 @@ function Liveticker() {
   const [events, setEvents] = useState([]);
   const [tickerTexts, setTickerTexts] = useState([]);
   const [favorites, setFavorites] = useState([]);
+  const [lineups, setLineups] = useState([]);
+  const [matchStats, setMatchStats] = useState([]);
+  const [playerStats, setPlayerStats] = useState([]);
 
   const [selectedLeagueId, setSelectedLeagueId] = useState(null);
   const [selectedLeagueSeasonId, setSelectedLeagueSeasonId] = useState(null);
@@ -208,6 +211,42 @@ function Liveticker() {
     }
   }, [selectedMatchId]);
 
+  const loadLineups = useCallback(async () => {
+    if (!selectedMatchId) return;
+    try {
+      const response = await axios.get(
+        `http://localhost:8000/api/v1/lineups/match/${selectedMatchId}`,
+      );
+      setLineups(response.data);
+    } catch (error) {
+      console.error("Error loading lineups:", error);
+    }
+  }, [selectedMatchId]);
+
+  const loadMatchStats = useCallback(async () => {
+    if (!selectedMatchId) return;
+    try {
+      const response = await axios.get(
+        `http://localhost:8000/api/v1/match-statistics/match/${selectedMatchId}`,
+      );
+      setMatchStats(response.data);
+    } catch (error) {
+      console.error("Error loading match statistics:", error);
+    }
+  }, [selectedMatchId]);
+
+  const loadPlayerStats = useCallback(async () => {
+    if (!selectedMatchId) return;
+    try {
+      const response = await axios.get(
+        `http://localhost:8000/api/v1/player-statistics/match/${selectedMatchId}`,
+      );
+      setPlayerStats(response.data);
+    } catch (error) {
+      console.error("Error loading player statistics:", error);
+    }
+  }, [selectedMatchId]);
+
   // ==================== EFFECTS ====================
 
   useEffect(() => {
@@ -244,6 +283,9 @@ function Liveticker() {
       loadMatch();
       loadEvents();
       loadTickerTexts();
+      loadLineups();
+      loadMatchStats();
+      loadPlayerStats();
 
       const interval = setInterval(() => {
         loadEvents();
@@ -525,6 +567,455 @@ function Liveticker() {
 
       {!match && matches.length > 0 && (
         <div className="no-events">Bitte wähle ein Match aus</div>
+      )}
+
+      {/* Lineups */}
+      {match && lineups.length > 0 && (
+        <div className="lineups-section">
+          <h3>📋 Aufstellungen</h3>
+
+          <div className="lineups-grid">
+            {/* Home Team */}
+            <div className="lineup-column">
+              <h4>{match.home_team.name}</h4>
+              {(() => {
+                const homeLineup = lineups.filter(
+                  (l) => l.team_id === match.home_team_id && !l.is_substitute,
+                );
+                const formation = homeLineup[0]?.formation;
+
+                return (
+                  <>
+                    {formation && (
+                      <div className="formation">🔢 Formation: {formation}</div>
+                    )}
+                    <div className="starting-xi">
+                      <strong>Startelf:</strong>
+                      <ul>
+                        {homeLineup.map((player) => (
+                          <li key={player.id}>
+                            #{player.number} {player.player_name} (
+                            {player.position})
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="substitutes">
+                      <strong>Ersatzbank:</strong>
+                      <ul>
+                        {lineups
+                          .filter(
+                            (l) =>
+                              l.team_id === match.home_team_id &&
+                              l.is_substitute,
+                          )
+                          .map((player) => (
+                            <li key={player.id}>
+                              #{player.number} {player.player_name} (
+                              {player.position})
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Away Team */}
+            <div className="lineup-column">
+              <h4>{match.away_team.name}</h4>
+              {(() => {
+                const awayLineup = lineups.filter(
+                  (l) => l.team_id === match.away_team_id && !l.is_substitute,
+                );
+                const formation = awayLineup[0]?.formation;
+
+                return (
+                  <>
+                    {formation && (
+                      <div className="formation">🔢 Formation: {formation}</div>
+                    )}
+                    <div className="starting-xi">
+                      <strong>Startelf:</strong>
+                      <ul>
+                        {awayLineup.map((player) => (
+                          <li key={player.id}>
+                            #{player.number} {player.player_name} (
+                            {player.position})
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="substitutes">
+                      <strong>Ersatzbank:</strong>
+                      <ul>
+                        {lineups
+                          .filter(
+                            (l) =>
+                              l.team_id === match.away_team_id &&
+                              l.is_substitute,
+                          )
+                          .map((player) => (
+                            <li key={player.id}>
+                              #{player.number} {player.player_name} (
+                              {player.position})
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Match Statistics */}
+      {match && matchStats.length > 0 && (
+        <div className="match-stats-section">
+          <h3>📊 Spielstatistiken</h3>
+
+          <div className="stats-grid">
+            {/* Home Team Stats */}
+            {(() => {
+              const homeStats = matchStats.find(
+                (s) => s.team_id === match.home_team_id,
+              );
+              const awayStats = matchStats.find(
+                (s) => s.team_id === match.away_team_id,
+              );
+
+              if (!homeStats || !awayStats) return null;
+
+              return (
+                <>
+                  {/* Ballbesitz */}
+                  <div className="stat-row">
+                    <div className="stat-value">
+                      {homeStats.ball_possession}%
+                    </div>
+                    <div className="stat-label">Ballbesitz</div>
+                    <div className="stat-value">
+                      {awayStats.ball_possession}%
+                    </div>
+                  </div>
+
+                  {/* Ballbesitz Bar */}
+                  <div className="stat-bar-container">
+                    <div
+                      className="stat-bar home"
+                      style={{ width: `${homeStats.ball_possession}%` }}
+                    />
+                    <div
+                      className="stat-bar away"
+                      style={{ width: `${awayStats.ball_possession}%` }}
+                    />
+                  </div>
+
+                  {/* Schüsse */}
+                  <div className="stat-row">
+                    <div className="stat-value">{homeStats.total_shots}</div>
+                    <div className="stat-label">Schüsse gesamt</div>
+                    <div className="stat-value">{awayStats.total_shots}</div>
+                  </div>
+
+                  <div className="stat-row">
+                    <div className="stat-value">{homeStats.shots_on_goal}</div>
+                    <div className="stat-label">Schüsse aufs Tor</div>
+                    <div className="stat-value">{awayStats.shots_on_goal}</div>
+                  </div>
+
+                  <div className="stat-row">
+                    <div className="stat-value">
+                      {homeStats.shots_insidebox}
+                    </div>
+                    <div className="stat-label">Schüsse im Strafraum</div>
+                    <div className="stat-value">
+                      {awayStats.shots_insidebox}
+                    </div>
+                  </div>
+
+                  {/* Pässe */}
+                  <div className="stat-row">
+                    <div className="stat-value">
+                      {homeStats.passes_accurate}/{homeStats.total_passes}
+                    </div>
+                    <div className="stat-label">Pässe (präzise/gesamt)</div>
+                    <div className="stat-value">
+                      {awayStats.passes_accurate}/{awayStats.total_passes}
+                    </div>
+                  </div>
+
+                  <div className="stat-row">
+                    <div className="stat-value">
+                      {homeStats.passes_percentage}%
+                    </div>
+                    <div className="stat-label">Passgenauigkeit</div>
+                    <div className="stat-value">
+                      {awayStats.passes_percentage}%
+                    </div>
+                  </div>
+
+                  {/* Weitere Stats */}
+                  <div className="stat-row">
+                    <div className="stat-value">{homeStats.corner_kicks}</div>
+                    <div className="stat-label">Ecken</div>
+                    <div className="stat-value">{awayStats.corner_kicks}</div>
+                  </div>
+
+                  <div className="stat-row">
+                    <div className="stat-value">{homeStats.fouls}</div>
+                    <div className="stat-label">Fouls</div>
+                    <div className="stat-value">{awayStats.fouls}</div>
+                  </div>
+
+                  <div className="stat-row">
+                    <div className="stat-value">{homeStats.offsides}</div>
+                    <div className="stat-label">Abseits</div>
+                    <div className="stat-value">{awayStats.offsides}</div>
+                  </div>
+
+                  <div className="stat-row">
+                    <div className="stat-value">{homeStats.yellow_cards}</div>
+                    <div className="stat-label">Gelbe Karten</div>
+                    <div className="stat-value">{awayStats.yellow_cards}</div>
+                  </div>
+
+                  {(homeStats.red_cards > 0 || awayStats.red_cards > 0) && (
+                    <div className="stat-row">
+                      <div className="stat-value">{homeStats.red_cards}</div>
+                      <div className="stat-label">Rote Karten</div>
+                      <div className="stat-value">{awayStats.red_cards}</div>
+                    </div>
+                  )}
+
+                  <div className="stat-row">
+                    <div className="stat-value">
+                      {homeStats.goalkeeper_saves}
+                    </div>
+                    <div className="stat-label">Paraden</div>
+                    <div className="stat-value">
+                      {awayStats.goalkeeper_saves}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Player Statistics - Top Spieler */}
+      {match && playerStats.length > 0 && (
+        <div className="player-stats-section">
+          <h3>⭐ Beste Spieler</h3>
+
+          <div className="top-players">
+            {playerStats
+              .filter((p) => p.rating !== null && p.rating > 0)
+              .sort((a, b) => b.rating - a.rating)
+              .slice(0, 5)
+              .map((player, idx) => (
+                <div key={player.id} className="top-player-card">
+                  <div className="player-rank">#{idx + 1}</div>
+
+                  <div className="player-main">
+                    <div className="player-header">
+                      <div className="player-name-container">
+                        <span className="player-name">
+                          {player.player_name}
+                        </span>
+                        {player.captain && (
+                          <span className="captain-badge">©</span>
+                        )}
+                      </div>
+                      <div className="player-meta">
+                        {player.position} • #{player.number} •{" "}
+                        {player.minutes_played}'
+                      </div>
+                    </div>
+
+                    <div className="player-rating">
+                      <span className="rating-value">{player.rating}</span>
+                      <span className="rating-label">Rating</span>
+                    </div>
+                  </div>
+
+                  <div className="player-stats-summary">
+                    {player.goals_total > 0 && (
+                      <div className="stat-badge goals">
+                        <span className="stat-icon">⚽</span>
+                        <span className="stat-value">{player.goals_total}</span>
+                      </div>
+                    )}
+                    {player.goals_assists > 0 && (
+                      <div className="stat-badge assists">
+                        <span className="stat-icon">🎯</span>
+                        <span className="stat-value">
+                          {player.goals_assists}
+                        </span>
+                      </div>
+                    )}
+                    {player.shots_on > 0 && (
+                      <div className="stat-badge shots">
+                        <span className="stat-icon">🎯</span>
+                        <span className="stat-value">
+                          {player.shots_on}/{player.shots_total}
+                        </span>
+                        <span className="stat-label">Schüsse</span>
+                      </div>
+                    )}
+                    {player.passes_accuracy > 0 && (
+                      <div className="stat-badge passes">
+                        <span className="stat-icon">⚡</span>
+                        <span className="stat-value">
+                          {player.passes_accuracy}%
+                        </span>
+                        <span className="stat-label">Pässe</span>
+                      </div>
+                    )}
+                    {player.cards_yellow > 0 && (
+                      <div className="stat-badge yellow">
+                        <span className="stat-icon">🟨</span>
+                        <span className="stat-value">
+                          {player.cards_yellow}
+                        </span>
+                      </div>
+                    )}
+                    {player.cards_red > 0 && (
+                      <div className="stat-badge red">
+                        <span className="stat-icon">🟥</span>
+                        <span className="stat-value">{player.cards_red}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+          </div>
+
+          {/* Detaillierte Team-Statistiken (optional, ausklappbar) */}
+          <details className="team-player-stats">
+            <summary>📊 Alle Spieler-Statistiken</summary>
+
+            <div className="teams-stats-grid">
+              {/* Home Team */}
+              {(() => {
+                const homePlayers = playerStats
+                  .filter((p) => p.team_id === match.home_team_id)
+                  .sort((a, b) => (b.rating || 0) - (a.rating || 0));
+
+                return (
+                  <div className="team-stats-section">
+                    <h4>{match.home_team.name}</h4>
+
+                    <table className="players-table">
+                      <thead>
+                        <tr>
+                          <th>Spieler</th>
+                          <th>Pos</th>
+                          <th>Min</th>
+                          <th>Rating</th>
+                          <th>⚽</th>
+                          <th>🎯</th>
+                          <th>Pässe</th>
+                          <th>🟨</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {homePlayers.map((player) => (
+                          <tr
+                            key={player.id}
+                            className={player.substitute ? "substitute" : ""}
+                          >
+                            <td>
+                              {player.player_name}
+                              {player.captain && (
+                                <span className="captain-icon">©</span>
+                              )}
+                            </td>
+                            <td>{player.position}</td>
+                            <td>{player.minutes_played}'</td>
+                            <td className="rating-cell">
+                              {player.rating || "-"}
+                            </td>
+                            <td>{player.goals_total || "-"}</td>
+                            <td>{player.goals_assists || "-"}</td>
+                            <td>
+                              {player.passes_total
+                                ? `${player.passes_accuracy}%`
+                                : "-"}
+                            </td>
+                            <td>{player.cards_yellow || "-"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+
+              {/* Away Team */}
+              {(() => {
+                const awayPlayers = playerStats
+                  .filter((p) => p.team_id === match.away_team_id)
+                  .sort((a, b) => (b.rating || 0) - (a.rating || 0));
+
+                return (
+                  <div className="team-stats-section">
+                    <h4>{match.away_team.name}</h4>
+
+                    <table className="players-table">
+                      <thead>
+                        <tr>
+                          <th>Spieler</th>
+                          <th>Pos</th>
+                          <th>Min</th>
+                          <th>Rating</th>
+                          <th>⚽</th>
+                          <th>🎯</th>
+                          <th>Pässe</th>
+                          <th>🟨</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {awayPlayers.map((player) => (
+                          <tr
+                            key={player.id}
+                            className={player.substitute ? "substitute" : ""}
+                          >
+                            <td>
+                              {player.player_name}
+                              {player.captain && (
+                                <span className="captain-icon">©</span>
+                              )}
+                            </td>
+                            <td>{player.position}</td>
+                            <td>{player.minutes_played}'</td>
+                            <td className="rating-cell">
+                              {player.rating || "-"}
+                            </td>
+                            <td>{player.goals_total || "-"}</td>
+                            <td>{player.goals_assists || "-"}</td>
+                            <td>
+                              {player.passes_total
+                                ? `${player.passes_accuracy}%`
+                                : "-"}
+                            </td>
+                            <td>{player.cards_yellow || "-"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+          </details>
+        </div>
       )}
 
       {/* Events */}
