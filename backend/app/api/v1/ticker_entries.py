@@ -1,0 +1,185 @@
+"""
+Ticker Entries API Endpoints.
+GET /api/v1/ticker - Liste aller Ticker-Einträge
+GET /api/v1/ticker/match/{match_id} - Ticker für ein Match
+POST /api/v1/ticker - Neuer Ticker-Eintrag
+POST /api/v1/ticker/generate/{event_id} - Auto-Generierung
+POST /api/v1/ticker/{id}/publish - Eintrag veröffentlichen
+"""
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.repositories.ticker_entry_repository import TickerEntryRepository
+from app.repositories.event_repository import EventRepository
+from app.repositories.team_repository import TeamRepository
+from app.schemas.ticker_entry import TickerEntry, TickerEntryCreate, TickerEntryUpdate
+from app.services.llm_service import llm_service
+
+
+router = APIRouter(prefix="/ticker", tags=["ticker"])
+
+
+@router.get("/", response_model=list[TickerEntry])
+def get_ticker_entries(
+    skip: int = 0,
+    limit: int = 100,
+    mode: str | None = Query(None, pattern="^(auto|hybrid|manual)$"),
+    db: Session = Depends(get_db),
+):
+    """
+    Holt alle Ticker-Einträge mit Pagination und optionalem Modus-Filter.
+
+    - **skip**: Anzahl zu überspringender Einträge (default: 0)
+    - **limit**: Max. Anzahl Ergebnisse (default: 100)
+    - **mode**: Optional - Filter nach Modus (auto, hybrid, manual)
+    """
+    repo = TickerEntryRepository(db)
+
+    if mode:
+        entries = repo.get_by_mode(mode, skip=skip, limit=limit)
+    else:
+        entries = repo.get_all(skip=skip, limit=limit)
+
+    return entries
+
+
+@router.get("/match/{match_id}", response_model=list[TickerEntry])
+def get_match_ticker(
+    match_id: int,
+    published_only: bool = Query(False),
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    """
+    Holt Ticker-Einträge für ein bestimmtes Match, chronologisch sortiert.
+
+    - **match_id**: Match-ID
+    - **published_only**: Nur veröffentlichte Einträge (default: false)
+    - **skip**: Anzahl zu überspringender Einträge (default: 0)
+    - **limit**: Max. Anzahl Ergebnisse (default: 100)
+    """
+    repo = TickerEntryRepository(db)
+
+    if published_only:
+        return repo.get_published(match_id)
+    else:
+        return repo.get_by_match(match_id, skip=skip, limit=limit)
+
+
+@router.get("/{entry_id}", response_model=TickerEntry)
+def get_ticker_entry(entry_id: int, db: Session = Depends(get_db)):
+    """
+    Holt einzelnen Ticker-Eintrag nach ID.
+
+    - **entry_id**: Ticker-Entry-ID
+    """
+    repo = TickerEntryRepository(db)
+    entry = repo.get_by_id(entry_id)
+
+    if not entry:
+        raise HTTPException(status_code=404, detail="Ticker entry not found")
+
+    return entry
+
+
+@router.post("/", response_model=TickerEntry, status_code=201)
+def create_ticker_entry(entry: TickerEntryCreate, db: Session = Depends(get_db)):
+    """
+    Erstellt neuen Ticker-Eintrag.
+
+    - **entry**: Ticker-Daten (match_id, minute, text, mode, etc.)
+    """
+    repo = TickerEntryRepository(db)
+    return repo.create(entry)
+
+
+@router.post("/generate/{event_id}", response_model=TickerEntry, status_code=201)
+def generate_ticker_for_event(
+    event_id: int,
+    style: str = Query("neutral", pattern="^(neutral|euphorisch|kritisch)$"),
+    mode: str = Query("auto", pattern="^(auto|hybrid|manual)$"),
+    db: Session = Depends(get_db),
+):
+    """
+    Generiert automatisch Ticker-Text für ein Event mit LLM.
+
+    - **event_id**: ID des Events
+    - **style**: Schreibstil ('neutral', 'euphorisch', 'kritisch')
+    - **mode**: Modus ('auto', 'hybrid', 'manual')
+    """
+    event_repo = EventRepository(db)
+    team_repo = TeamRepository(db)
+    ticker_repo = TickerEntryRepository(db)
+
+    # Event laden
+    event = event_repo.get_by_id(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # Team-Namen holen
+    team = team_repo.get_by_id(event.team_id)
+    team_name = team.name if team else "Unknown Team"
+
+    # LLM Text generieren
+    generated_text = llm_service.generate_ticker_text(
+        event_type=event.type,
+        event_detail=event.detail,
+        minute=event.minute,
+        player_name=event.player_name,
+        assist_name=event.assist_name,
+        team_name=team_name,
+        style=style,
+    )
+
+    # Ticker Entry erstellen
+    ticker_data = TickerEntryCreate(
+        match_id=event.match_id,
+        event_id=event.id,
+        minute=event.minute,
+        text=generated_text,
+        mode=mode,
+        style=style,
+        language="de",
+        llm_model="mock" if llm_service.provider == "mock" else llm_service.provider,
+    )
+
+    ticker_entry = ticker_repo.create(ticker_data)
+    return ticker_entry
+
+
+@router.post("/{entry_id}/publish", response_model=TickerEntry)
+def publish_ticker_entry(entry_id: int, db: Session = Depends(get_db)):
+    """
+    Veröffentlicht einen Ticker-Eintrag (setzt published_at Timestamp).
+
+    - **entry_id**: Ticker-Entry-ID
+    """
+    repo = TickerEntryRepository(db)
+    published = repo.publish(entry_id)
+
+    if not published:
+        raise HTTPException(status_code=404, detail="Ticker entry not found")
+
+    return published
+
+
+@router.patch("/{entry_id}", response_model=TickerEntry)
+def update_ticker_entry(
+    entry_id: int, entry_update: TickerEntryUpdate, db: Session = Depends(get_db)
+):
+    """
+    Aktualisiert Ticker-Eintrag (z.B. Text korrigieren).
+
+    - **entry_id**: Ticker-Entry-ID
+    - **entry_update**: Zu aktualisierende Felder
+    """
+    repo = TickerEntryRepository(db)
+    updated = repo.update(entry_id, entry_update)
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="Ticker entry not found")
+
+    return updated
