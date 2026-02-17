@@ -1,0 +1,256 @@
+.liveticker {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+.loading {
+  text-align: center;
+  padding: 50px;
+  font-size: 18px;
+  color: #666;
+}
+
+/* Navigation */
+.navigation {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.dropdown-container {
+  flex: 1;
+  min-width: 200px;
+}
+
+.dropdown-container label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: #333;
+  font-size: 14px;
+}
+
+.dropdown {
+  width: 100%;
+  padding: 10px 15px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 16px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.dropdown:hover {
+  border-color: #667eea;
+}
+
+.dropdown:focus {
+  outline: none;
+  border-color: #764ba2;
+}
+
+/* Match Header */
+.match-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 30px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.teams {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.team {
+  flex: 1;
+  text-align: center;
+}
+
+.score {
+  font-size: 48px;
+  color: #ffd700;
+  padding: 0 30px;
+}
+
+.match-info {
+  text-align: center;
+  margin-top: 15px;
+  opacity: 0.9;
+}
+
+/* Events */
+.events-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.event {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background 0.2s;
+}
+
+.event:hover {
+  background: #f8f9fa;
+}
+
+.event:last-child {
+  border-bottom: none;
+}
+
+.event-goal {
+  background: linear-gradient(90deg, #e8f5e9 0%, white 100%);
+  border-left: 4px solid #4caf50;
+}
+
+.event-card {
+  background: linear-gradient(90deg, #fff3e0 0%, white 100%);
+  border-left: 4px solid #ff9800;
+}
+
+.event-subst {
+  background: linear-gradient(90deg, #e3f2fd 0%, white 100%);
+  border-left: 4px solid #2196f3;
+}
+
+.event-minute {
+  font-weight: bold;
+  color: #d32f2f;
+  min-width: 50px;
+  font-size: 18px;
+}
+
+.event-icon {
+  font-size: 24px;
+  margin: 0 15px;
+}
+
+.event-text {
+  flex: 1;
+  font-size: 16px;
+  color: #333;
+}
+
+.no-events {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+  font-size: 16px;
+}
+/* Ticker Text Styling */
+.event-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ticker-text-container {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ticker-text {
+  font-size: 16px;
+  color: #333;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.ticker-meta {
+  font-size: 12px;
+  color: #999;
+  font-style: italic;
+}
+
+.generate-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.generate-btn {
+  padding: 6px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.generate-btn:hover:not(:disabled) {
+  border-color: #667eea;
+  background: #f8f9ff;
+  transform: translateY(-1px);
+}
+
+.generate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.generate-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Tab Navigation */
+.tab-navigation {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.tab-navigation button {
+  padding: 1rem 2rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #666;
+  transition: all 0.3s ease;
+}
+
+.tab-navigation button:hover {
+  color: #333;
+}
+
+.tab-navigation button.active {
+  color: #e30613;
+  border-bottom-color: #e30613;
+  font-weight: bold;
+}
+
+/* Favorite Button */
+.favorite-btn {
+  margin-left: 0.5rem;
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.favorite-btn:hover {
+  transform: scale(1.2);
+}
