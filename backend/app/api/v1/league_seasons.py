@@ -58,18 +58,22 @@ def get_league_season_matches(
 @router.get("/{league_season_id}/rounds", response_model=list[str])
 def get_league_season_rounds(league_season_id: int, db: Session = Depends(get_db)):
     """Holt alle Spieltage einer LeagueSeason."""
-    from app.models.match import Match
+    repo = LeagueSeasonRepository(db)
+    league_season = repo.get_by_id(league_season_id)
 
-    # Unique rounds
-    rounds = (
-        db.query(Match.round)
-        .filter(Match.league_season_id == league_season_id, Match.round.isnot(None))
-        .distinct()
-        .order_by(Match.round)
-        .all()
-    )
+    if not league_season:
+        raise HTTPException(status_code=404, detail="LeagueSeason not found")
 
-    return [r[0] for r in rounds]
+    if not league_season.rounds:
+        return []
+
+    import json
+
+    rounds = league_season.rounds
+    if isinstance(rounds, str):
+        rounds = json.loads(rounds)
+
+    return rounds
 
 
 @router.post("/", response_model=LeagueSeason, status_code=201)

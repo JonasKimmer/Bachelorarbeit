@@ -18,6 +18,7 @@ function Liveticker() {
   const [lineups, setLineups] = useState([]);
   const [matchStats, setMatchStats] = useState([]);
   const [playerStats, setPlayerStats] = useState([]);
+  const [prematchEntries, setPrematchEntries] = useState([]);
 
   const [selectedLeagueId, setSelectedLeagueId] = useState(null);
   const [selectedLeagueSeasonId, setSelectedLeagueSeasonId] = useState(null);
@@ -72,21 +73,25 @@ function Liveticker() {
   }, []);
 
   const loadRounds = useCallback(
-    async (leagueSeasonId) => {
+    async (leagueSeasonId, currentLeagueSeasons) => {
       try {
         const response = await axios.get(
           `http://localhost:8000/api/v1/league-seasons/${leagueSeasonId}/rounds`,
         );
         setRounds(response.data);
 
-        if (response.data.length > 0 && !selectedRound) {
-          setSelectedRound(response.data[0]);
+        if (response.data.length > 0) {
+          await handleRoundChange(
+            response.data[0],
+            leagueSeasonId,
+            currentLeagueSeasons,
+          );
         }
       } catch (error) {
         console.error("Error loading rounds:", error);
       }
     },
-    [selectedRound],
+    [],
   );
 
   const loadMatches = useCallback(
@@ -166,15 +171,6 @@ function Liveticker() {
     }
   }, []);
 
-  const loadTeams = useCallback(async () => {
-    try {
-      const response = await axios.get("http://localhost:8000/api/v1/teams");
-      setTeams(response.data);
-    } catch (error) {
-      console.error("Error loading teams:", error);
-    }
-  }, []);
-
   const loadMatch = useCallback(async () => {
     if (!selectedMatchId) return;
     try {
@@ -247,11 +243,22 @@ function Liveticker() {
     }
   }, [selectedMatchId]);
 
+  const loadPrematchEntries = useCallback(async () => {
+    if (!selectedMatchId) return;
+    try {
+      const response = await axios.get(
+        `http://localhost:8000/api/v1/ticker/match/${selectedMatchId}/prematch`,
+      );
+      setPrematchEntries(response.data);
+    } catch (error) {
+      console.error("Error loading prematch entries:", error);
+    }
+  }, [selectedMatchId]);
+
   // ==================== EFFECTS ====================
 
   useEffect(() => {
     loadLeagues();
-    loadTeams();
     loadFavorites();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -265,18 +272,10 @@ function Liveticker() {
 
   useEffect(() => {
     if (selectedLeagueSeasonId) {
-      loadRounds(selectedLeagueSeasonId);
-      loadMatches(selectedLeagueSeasonId);
+      loadRounds(selectedLeagueSeasonId, leagueSeasons);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLeagueSeasonId]);
-
-  useEffect(() => {
-    if (selectedLeagueSeasonId && selectedRound) {
-      loadMatches(selectedLeagueSeasonId, selectedRound);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRound]);
+  }, [selectedLeagueSeasonId, leagueSeasons]);
 
   useEffect(() => {
     if (selectedMatchId) {
@@ -286,12 +285,32 @@ function Liveticker() {
       loadLineups();
       loadMatchStats();
       loadPlayerStats();
+      loadPrematchEntries();
+
+      // Nochmal nach 5s – Webhook braucht Zeit
+      const delay1 = setTimeout(() => {
+        loadLineups();
+        loadMatchStats();
+        loadPlayerStats();
+      }, 5000);
+
+      // Nochmal nach 15s – falls Webhook länger braucht
+      const delay2 = setTimeout(() => {
+        loadLineups();
+        loadMatchStats();
+        loadPlayerStats();
+      }, 15000);
 
       const interval = setInterval(() => {
         loadEvents();
         loadTickerTexts();
       }, 5000);
-      return () => clearInterval(interval);
+
+      return () => {
+        clearInterval(interval);
+        clearTimeout(delay1);
+        clearTimeout(delay2);
+      };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMatchId]);
@@ -324,9 +343,36 @@ function Liveticker() {
     setSelectedMatchId(null);
   };
 
-  const handleRoundChange = (round) => {
+  const handleRoundChange = async (
+    round,
+    leagueSeasonId = selectedLeagueSeasonId,
+    currentLeagueSeasons = leagueSeasons,
+  ) => {
     setSelectedRound(round);
     setSelectedMatchId(null);
+    setMatches([]);
+
+    const ls = currentLeagueSeasons.find((ls) => ls.id === leagueSeasonId);
+    if (!ls) {
+      console.error(
+        "LeagueSeason nicht gefunden:",
+        leagueSeasonId,
+        currentLeagueSeasons,
+      );
+      return;
+    }
+
+    try {
+      await axios.post("http://localhost:5678/webhook/import-matches", {
+        league_id: ls.league.external_id,
+        season: ls.season.year,
+        round: round,
+      });
+    } catch (err) {
+      console.error("Match-Import fehlgeschlagen:", err);
+    }
+
+    await loadMatches(leagueSeasonId, round);
   };
 
   const handleMatchChange = (matchId) => {
@@ -1021,6 +1067,24 @@ function Liveticker() {
       {/* Events */}
       {match && (
         <div className="events-container">
+          {/* Pre-Match Einträge oben */}
+          {prematchEntries.map((entry) => (
+            <div
+              key={`pre-${entry.ticker_entry_id}`}
+              className="event event-prematch"
+            >
+              <div className="event-minute">Vor</div>
+              <div className="event-icon">📋</div>
+              <div className="event-content">
+                <div className="ticker-text-container">
+                  <div className="ticker-text">{entry.text}</div>
+                  <div className="ticker-meta">{entry.llm_model}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Normale Events */}
           {events.length === 0 ? (
             <div className="no-events">Keine Events für dieses Spiel</div>
           ) : (

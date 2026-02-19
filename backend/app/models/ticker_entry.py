@@ -24,6 +24,9 @@ class TickerEntry(Base):
     event_id = Column(
         Integer, ForeignKey("events.id", ondelete="SET NULL"), nullable=True
     )
+    synthetic_event_id = Column(
+        Integer, ForeignKey("synthetic_events.id", ondelete="SET NULL"), nullable=True
+    )
     minute = Column(Integer, nullable=False)
     text = Column(Text, nullable=False)
     mode = Column(String(20), nullable=False)  # 'auto', 'hybrid', 'manual'
@@ -38,6 +41,7 @@ class TickerEntry(Base):
     # Relationships
     match = relationship("Match", backref="ticker_entries")
     event = relationship("Event", backref="ticker_entries")
+    synthetic_event = relationship("SyntheticEvent", backref="ticker_entries")
 
     def __repr__(self):
         return f"<TickerEntry(id={self.id}, mode='{self.mode}', minute={self.minute})>"

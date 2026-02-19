@@ -130,6 +130,11 @@
   border-left: 4px solid #2196f3;
 }
 
+.event-prematch {
+  background: linear-gradient(90deg, #f3e5f5 0%, white 100%);
+  border-left: 4px solid #9c27b0;
+}
+
 .event-minute {
   font-weight: bold;
   color: #d32f2f;
@@ -694,4 +699,24 @@
   .players-table td {
     padding: 0.5rem 0.3rem;
   }
+}
+
+.prematch-section {
+  background: #1e1e2e;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.prematch-entry {
+  border-left: 3px solid #4a90e2;
+  padding: 8px 12px;
+  margin: 8px 0;
+  background: #2a2a3e;
+  border-radius: 0 6px 6px 0;
+}
+
+.prematch-entry p {
+  margin: 0 0 4px 0;
+  color: #e0e0e0;
 }

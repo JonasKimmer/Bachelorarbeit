@@ -12,6 +12,7 @@ from app.api.v1 import (
     matches,
     events,
     ticker_entries,
+    ticker,
     leagues,
     seasons,
     league_seasons,
@@ -34,6 +35,7 @@ from app.models.user_favorite import UserFavorite
 from app.models.match_statistic import MatchStatistic
 from app.models.lineup import Lineup
 from app.models.player_statistic import PlayerStatistic
+from app.models.synthetic_event import SyntheticEvent
 
 
 # DB-Tabellen erstellen (falls nicht vorhanden)
@@ -70,6 +72,7 @@ app.include_router(teams.router, prefix="/api/v1")
 app.include_router(matches.router, prefix="/api/v1")
 app.include_router(events.router, prefix="/api/v1")
 app.include_router(ticker_entries.router, prefix="/api/v1")
+app.include_router(ticker.router, prefix="/api/v1")
 app.include_router(leagues.router, prefix="/api/v1")
 app.include_router(seasons.router, prefix="/api/v1")
 app.include_router(league_seasons.router, prefix="/api/v1")
