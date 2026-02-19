@@ -1,12 +1,8 @@
+import LiveTicker from "./LiveTicker";
 import "./App.css";
-import Liveticker from "./LiveTicker"; // Großes T
 
 function App() {
-  return (
-    <div className="App">
-      <Liveticker />
-    </div>
-  );
+  return <LiveTicker />;
 }
 
 export default App;
