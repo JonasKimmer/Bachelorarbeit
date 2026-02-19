@@ -18,6 +18,8 @@ export const fetchTickerTexts = (matchId) =>
   api.get(`/ticker/match/${matchId}`);
 export const fetchPrematch = (matchId) =>
   api.get(`/ticker/match/${matchId}/prematch`);
+export const fetchLiveStats = (matchId) =>
+  api.get(`/ticker/match/${matchId}/live`);
 export const fetchLineups = (matchId) => api.get(`/lineups/match/${matchId}`);
 export const fetchMatchStats = (matchId) =>
   api.get(`/match-statistics/match/${matchId}`);
@@ -36,5 +38,12 @@ export const removeFavorite = (teamId) =>
   api.delete(`/favorites/${teamId}?user_id=1`);
 export const importMatches = (leagueId, season, round) =>
   n8n.post("/import-matches", { league_id: leagueId, season, round });
-export const createManualTicker = (matchId, text) =>
-  api.post(`/ticker/manual`, { match_id: matchId, text });
+export const createManualTicker = (matchId, text, icon = "📝", minute = 0) =>
+  api.post(`/ticker/`, {
+    match_id: matchId,
+    text,
+    mode: "manual",
+    language: "de",
+    minute,
+    icon,
+  });

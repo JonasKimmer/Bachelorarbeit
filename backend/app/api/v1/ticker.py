@@ -15,6 +15,9 @@ from app.schemas.synthetic_event import (
 from app.services.llm_service import generate_ticker_text, _provider
 from app.models.ticker_entry import TickerEntry
 from app.models.synthetic_event import SyntheticEvent as SyntheticEventModel
+from app.models.match import Match
+from app.repositories.event_repository import EventRepository
+
 
 router = APIRouter(prefix="/ticker", tags=["ticker"])
 
@@ -152,3 +155,89 @@ def get_prematch_entries(match_id: int, db: Session = Depends(get_db)):
         )
         for e in entries
     ]
+
+
+@router.get("/match/{match_id}/live", response_model=list[GenerateSyntheticResponse])
+def get_live_entries(match_id: int, db: Session = Depends(get_db)):
+    """Get live ticker entries (live stats updates) for a match, ordered by latest first."""
+    entries = (
+        db.query(TickerEntry)
+        .join(
+            SyntheticEventModel,
+            TickerEntry.synthetic_event_id == SyntheticEventModel.id,
+        )
+        .filter(
+            TickerEntry.match_id == match_id,
+            SyntheticEventModel.event_type == "live_stats_update",
+        )
+        .order_by(TickerEntry.created_at.desc())
+        .all()
+    )
+    return [
+        GenerateSyntheticResponse(
+            ticker_entry_id=e.id,
+            synthetic_event_id=e.synthetic_event_id,
+            text=e.text,
+            llm_model=e.llm_model,
+            llm_provider=e.mode,
+        )
+        for e in entries
+    ]
+
+
+@router.post("/generate/{event_id}")
+async def generate_for_event(
+    event_id: int, style: str = "neutral", db: Session = Depends(get_db)
+):
+    from app.models.event import Event
+
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    existing = db.query(TickerEntry).filter(TickerEntry.event_id == event_id).first()
+    if existing:
+        return {
+            "ticker_entry_id": existing.id,
+            "text": existing.text,
+            "llm_model": existing.llm_model,
+        }
+
+    match = db.query(Match).filter(Match.id == event.match_id).first()
+    match_context = {
+        "home_team": match.home_team.name,
+        "away_team": match.away_team.name,
+        "score_home": match.score_home,
+        "score_away": match.score_away,
+        "status": match.status,
+        "minute": event.minute,
+    }
+
+    try:
+        text, model_used = await generate_ticker_text(
+            event_type=event.type,
+            event_detail=event.detail or "",
+            minute=event.minute or 0,
+            player_name=event.player_name,
+            assist_name=event.assist_name,
+            match_context=match_context,
+            style=style,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"LLM error: {str(e)}")
+
+    entry = TickerEntry(
+        match_id=event.match_id,
+        event_id=event_id,
+        minute=event.minute or 0,
+        text=text,
+        mode="auto",
+        style=style,
+        language="de",
+        llm_model=model_used,
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+
+    return {"ticker_entry_id": entry.id, "text": text, "llm_model": model_used}

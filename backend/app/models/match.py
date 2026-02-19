@@ -26,6 +26,7 @@ class Match(Base):
     status = Column(String(20), default="scheduled")  # scheduled, live, finished
     score_home = Column(Integer, default=0)
     score_away = Column(Integer, default=0)
+    minute = Column(Integer, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

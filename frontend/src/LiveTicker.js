@@ -17,12 +17,11 @@ function LoadingScreen() {
 
 function MatchHeader({ match, leagueSeason, favorites, onToggleFav }) {
   if (!match) return null;
-  const status =
-    match.status === "live"
-      ? "live"
-      : match.status === "finished"
-        ? "finished"
-        : "scheduled";
+  const status = ["1H", "2H", "HT", "ET", "live"].includes(match.status)
+    ? "live"
+    : ["FT", "AET", "PEN", "finished"].includes(match.status)
+      ? "finished"
+      : "scheduled";
   return (
     <div className="match-header">
       <div className="mh-teams">
@@ -61,7 +60,10 @@ function MatchHeader({ match, leagueSeason, favorites, onToggleFav }) {
         <span>·</span>
         <span>{match.round}</span>
         <span>·</span>
-        <span className={`mh-status ${status}`}>{match.status}</span>
+        <span className={`mh-status ${status}`}>
+          {match.status}
+          {match.minute ? ` ${match.minute}'` : ""}
+        </span>
       </div>
     </div>
   );
@@ -79,6 +81,7 @@ function TickerEvent({ event, tickerText, mode, generatingId, onGenerate }) {
         : event.type === "subst"
           ? "subst"
           : "";
+
   const icon =
     event.type === "Goal"
       ? "⚽"
@@ -97,7 +100,10 @@ function TickerEvent({ event, tickerText, mode, generatingId, onGenerate }) {
     return event.detail;
   };
 
-  // AUTO mode – KI-Text direkt anzeigen, keine Buttons
+  // MANUAL mode – Events ausblenden
+  if (mode === "manual") return null;
+
+  // AUTO mode
   if (mode === "auto") {
     return (
       <div className={`event ${typeClass}`}>
@@ -119,7 +125,7 @@ function TickerEvent({ event, tickerText, mode, generatingId, onGenerate }) {
     );
   }
 
-  // REVIEW mode – KI-Vorschlag + Bearbeiten/Veröffentlichen
+  // REVIEW mode
   if (mode === "review") {
     if (tickerText && !published) {
       return (
@@ -189,21 +195,6 @@ function TickerEvent({ event, tickerText, mode, generatingId, onGenerate }) {
       </div>
     );
   }
-
-  // MANUAL mode – Redakteur schreibt selbst
-  return (
-    <div className={`event ${typeClass}`}>
-      <span className="ev-minute">{event.minute}'</span>
-      <span className="ev-icon">{icon}</span>
-      <div className="ev-body">
-        {tickerText ? (
-          <div className="ticker-text">{tickerText.text}</div>
-        ) : (
-          <div className="ev-raw">{rawText()}</div>
-        )}
-      </div>
-    </div>
-  );
 }
 
 function StatsPanel({ match, matchStats, playerStats, lineups, prematch }) {
@@ -224,7 +215,6 @@ function StatsPanel({ match, matchStats, playerStats, lineups, prematch }) {
 
   return (
     <div>
-      {/* Prematch */}
       {prematch.length > 0 && (
         <div className="panel-section">
           <div className="panel-title">📋 Vorberichte</div>
@@ -237,7 +227,6 @@ function StatsPanel({ match, matchStats, playerStats, lineups, prematch }) {
         </div>
       )}
 
-      {/* Stats */}
       {homeStats && awayStats && (
         <div className="panel-section">
           <div className="panel-title">📊 Statistiken</div>
@@ -277,7 +266,6 @@ function StatsPanel({ match, matchStats, playerStats, lineups, prematch }) {
         </div>
       )}
 
-      {/* Top Players */}
       {topPlayers.length > 0 && (
         <div className="panel-section">
           <div className="panel-title">⭐ Beste Spieler</div>
@@ -298,7 +286,6 @@ function StatsPanel({ match, matchStats, playerStats, lineups, prematch }) {
         </div>
       )}
 
-      {/* Lineups */}
       {(homeLineup.length > 0 || awayLineup.length > 0) && (
         <div className="panel-section">
           <div className="panel-title">📋 Aufstellungen</div>
@@ -336,8 +323,10 @@ function StatsPanel({ match, matchStats, playerStats, lineups, prematch }) {
 export default function LiveTicker() {
   const [appLoading, setAppLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("ligen");
-  const [tickerMode, setTickerMode] = useState("auto"); // auto | review | manual
+  const [tickerMode, setTickerMode] = useState("auto");
   const [manualText, setManualText] = useState("");
+  const [manualIcon, setManualIcon] = useState("📝");
+  const [manualMinute, setManualMinute] = useState("");
 
   const [leagues, setLeagues] = useState([]);
   const [leagueSeasons, setLeagueSeasons] = useState([]);
@@ -356,13 +345,13 @@ export default function LiveTicker() {
     events,
     tickerTexts,
     prematch,
+    liveStats,
     lineups,
     matchStats,
     playerStats,
     reload,
   } = useMatchData(selMatchId);
 
-  // Initial load
   useEffect(() => {
     Promise.all([
       api.fetchLeagues().then((r) => {
@@ -382,15 +371,6 @@ export default function LiveTicker() {
     });
   }, [selLeagueId]);
 
-  useEffect(() => {
-    if (!selLSId) return;
-    api.fetchRounds(selLSId).then((r) => {
-      setRounds(r.data);
-      if (r.data.length > 0)
-        handleRoundChange(r.data[0], selLSId, leagueSeasons);
-    });
-  }, [selLSId]);
-
   const handleRoundChange = useCallback(
     async (round, lsId = selLSId, lsList = leagueSeasons) => {
       setSelRound(round);
@@ -408,12 +388,21 @@ export default function LiveTicker() {
     [selLSId, leagueSeasons],
   );
 
+  useEffect(() => {
+    if (!selLSId) return;
+    api.fetchRounds(selLSId).then((r) => {
+      setRounds(r.data);
+      if (r.data.length > 0)
+        handleRoundChange(r.data[0], selLSId, leagueSeasons);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selLSId]);
+
   const liveIntervalRef = React.useRef(null);
 
   const handleTabMatches = useCallback(async (tab) => {
     setActiveTab(tab);
     clearInterval(liveIntervalRef.current);
-
     const load = async () => {
       let res;
       if (tab === "heute") res = await api.fetchTodayMatches();
@@ -426,11 +415,8 @@ export default function LiveTicker() {
         );
       }
     };
-
     await load();
-    if (tab === "live") {
-      liveIntervalRef.current = setInterval(load, 10000);
-    }
+    if (tab === "live") liveIntervalRef.current = setInterval(load, 10000);
   }, []);
 
   useEffect(() => () => clearInterval(liveIntervalRef.current), []);
@@ -461,11 +447,13 @@ export default function LiveTicker() {
 
   const curLS = leagueSeasons.find((ls) => ls.id === selLSId);
 
+  // Manuelle Einträge = tickerTexts ohne event_id
+  const manualEntries = tickerTexts.filter((t) => !t.event_id);
+
   if (appLoading) return <LoadingScreen />;
 
   return (
     <div className="liveticker">
-      {/* Header */}
       <header className="lt-header">
         <div className="lt-logo">{config.clubName}</div>
         <nav className="lt-tabs">
@@ -488,7 +476,6 @@ export default function LiveTicker() {
         </nav>
       </header>
 
-      {/* Navigation */}
       {activeTab === "ligen" && (
         <div className="lt-nav">
           <div className="lt-select-wrap">
@@ -569,7 +556,6 @@ export default function LiveTicker() {
         </div>
       )}
 
-      {/* Match Header */}
       <MatchHeader
         match={match}
         leagueSeason={curLS}
@@ -577,7 +563,6 @@ export default function LiveTicker() {
         onToggleFav={toggleFav}
       />
 
-      {/* Ticker Mode Bar */}
       {match && (
         <div className="ticker-mode-bar">
           <span
@@ -606,12 +591,9 @@ export default function LiveTicker() {
         </div>
       )}
 
-      {/* Main Content */}
       <div className="lt-content">
-        {/* Left – Ticker */}
         <div className="lt-left">
           <div className="events-list">
-            {/* Prematch Events */}
             {prematch.map((e) => (
               <div key={`pre-${e.ticker_entry_id}`} className="event prematch">
                 <span className="ev-minute">Vor</span>
@@ -622,6 +604,33 @@ export default function LiveTicker() {
                 </div>
               </div>
             ))}
+
+            {liveStats.map((e) => (
+              <div
+                key={`live-${e.ticker_entry_id}`}
+                className="event live-stat"
+              >
+                <span className="ev-minute">📈</span>
+                <span className="ev-icon">⚡</span>
+                <div className="ev-body">
+                  <div className="ticker-text">{e.text}</div>
+                  <div className="ticker-meta">{e.llm_model}</div>
+                </div>
+              </div>
+            ))}
+
+            {/* Manuelle Einträge */}
+            {tickerMode === "manual" &&
+              manualEntries.map((t) => (
+                <div key={`manual-${t.id}`} className="event manual">
+                  <span className="ev-minute">{t.minute}'</span>
+                  <span className="ev-icon">{t.icon || "📝"}</span>
+                  <div className="ev-body">
+                    <div className="ticker-text">{t.text}</div>
+                    <div className="ticker-meta">manuell</div>
+                  </div>
+                </div>
+              ))}
 
             {events.length === 0 && match && (
               <div className="no-events">Keine Events für dieses Spiel</div>
@@ -642,9 +651,36 @@ export default function LiveTicker() {
             ))}
           </div>
 
-          {/* Manual Input */}
           {match && tickerMode === "manual" && (
             <div className="manual-input">
+              <div className="manual-icons">
+                {[
+                  ["⚽", "Tor"],
+                  ["🟨", "Gelb"],
+                  ["🟥", "Rot"],
+                  ["🔄", "Wechsel"],
+                  ["📋", "Info"],
+                  ["⚡", "Highlight"],
+                ].map(([icon, label]) => (
+                  <button
+                    key={icon}
+                    className={`icon-btn ${manualIcon === icon ? "active" : ""}`}
+                    title={label}
+                    onClick={() => setManualIcon(icon)}
+                  >
+                    {icon}
+                  </button>
+                ))}
+                <input
+                  className="manual-minute"
+                  type="number"
+                  min="0"
+                  max="120"
+                  placeholder="Min"
+                  value={manualMinute}
+                  onChange={(e) => setManualMinute(e.target.value)}
+                />
+              </div>
               <textarea
                 className="manual-textarea"
                 placeholder="Ticker-Eintrag schreiben..."
@@ -657,8 +693,15 @@ export default function LiveTicker() {
                 onClick={async () => {
                   if (!manualText.trim()) return;
                   try {
-                    await api.createManualTicker(selMatchId, manualText.trim());
+                    await api.createManualTicker(
+                      selMatchId,
+                      manualText.trim(),
+                      manualIcon,
+                      manualMinute ? parseInt(manualMinute) : 0,
+                    );
                     setManualText("");
+                    setManualIcon("📝");
+                    setManualMinute("");
                     await reload.loadTickerTexts();
                   } catch {
                     alert("Fehler beim Speichern");
@@ -671,7 +714,6 @@ export default function LiveTicker() {
           )}
         </div>
 
-        {/* Right – Stats Panel */}
         <div className="lt-right">
           <StatsPanel
             match={match}

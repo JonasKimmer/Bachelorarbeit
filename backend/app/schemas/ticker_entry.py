@@ -15,6 +15,7 @@ class TickerEntryBase(BaseModel):
     event_id: int | None = None
     minute: int = Field(ge=0, le=120)
     text: str = Field(min_length=1)
+    icon: str | None = None  # ← neu
     mode: str = Field(pattern="^(auto|hybrid|manual)$")
     style: str | None = Field(None, pattern="^(neutral|euphorisch|kritisch)$")
     language: str = Field(default="de", pattern="^(de|en|es|ja)$")

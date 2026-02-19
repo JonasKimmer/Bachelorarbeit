@@ -6,6 +6,7 @@ export function useMatchData(selectedMatchId) {
   const [events, setEvents] = useState([]);
   const [tickerTexts, setTickerTexts] = useState([]);
   const [prematch, setPrematch] = useState([]);
+  const [liveStats, setLiveStats] = useState([]);
   const [lineups, setLineups] = useState([]);
   const [matchStats, setMatchStats] = useState([]);
   const [playerStats, setPlayerStats] = useState([]);
@@ -36,6 +37,12 @@ export function useMatchData(selectedMatchId) {
     setPrematch(res.data);
   }, [selectedMatchId]);
 
+  const loadLiveStats = useCallback(async () => {
+    if (!selectedMatchId) return;
+    const res = await api.fetchLiveStats(selectedMatchId);
+    setLiveStats(res.data);
+  }, [selectedMatchId]);
+
   const loadLineups = useCallback(async () => {
     if (!selectedMatchId) return;
     const res = await api.fetchLineups(selectedMatchId);
@@ -54,6 +61,7 @@ export function useMatchData(selectedMatchId) {
     setPlayerStats(res.data);
   }, [selectedMatchId]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!selectedMatchId) return;
     setLoading(true);
@@ -63,12 +71,12 @@ export function useMatchData(selectedMatchId) {
       loadEvents(),
       loadTickerTexts(),
       loadPrematch(),
+      loadLiveStats(),
       loadLineups(),
       loadMatchStats(),
       loadPlayerStats(),
     ]).finally(() => setLoading(false));
 
-    // Retry für Webhook-Daten
     const t1 = setTimeout(() => {
       loadLineups();
       loadMatchStats();
@@ -85,6 +93,7 @@ export function useMatchData(selectedMatchId) {
     intervalRef.current = setInterval(() => {
       loadEvents();
       loadTickerTexts();
+      loadLiveStats();
     }, 5000);
 
     return () => {
@@ -99,10 +108,11 @@ export function useMatchData(selectedMatchId) {
     events,
     tickerTexts,
     prematch,
+    liveStats,
     lineups,
     matchStats,
     playerStats,
     loading,
-    reload: { loadEvents, loadTickerTexts, loadPrematch },
+    reload: { loadEvents, loadTickerTexts, loadPrematch, loadLiveStats },
   };
 }

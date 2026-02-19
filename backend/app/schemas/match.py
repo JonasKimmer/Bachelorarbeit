@@ -45,6 +45,7 @@ class Match(MatchBase):
     external_id: int | None
     score_home: int
     score_away: int
+    minute: int | None = None
     created_at: datetime
     updated_at: datetime | None
 
@@ -68,5 +69,6 @@ class MatchSimple(BaseModel):
     status: str
     score_home: int
     score_away: int
+    minute: int | None = None
 
     model_config = ConfigDict(from_attributes=True)

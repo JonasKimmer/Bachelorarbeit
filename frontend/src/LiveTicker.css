@@ -340,6 +340,10 @@ body {
 .event.prematch {
   border-left: 3px solid var(--prematch);
 }
+.event.live-stat {
+  border-left: 3px solid var(--accent);
+  background: rgba(245, 166, 35, 0.05);
+}
 
 .ev-minute {
   min-width: 36px;
@@ -682,4 +686,23 @@ body {
   .mh-score {
     font-size: 2.2rem;
   }
+}
+
+.manual-icons {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.icon-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.3rem 0.5rem;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--accent);
 }

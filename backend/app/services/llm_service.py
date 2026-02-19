@@ -5,7 +5,6 @@ Provider: Mock, OpenAI, Anthropic, Gemini
 
 from typing import Optional, Literal
 import random
-import os
 
 
 class LLMService:
@@ -134,16 +133,42 @@ class LLMService:
             "kritisch": "analytisch und kritisch",
         }.get(style, "neutral")
 
-        # Event-spezifischer Kontext
+        minute_str = f"{minute}. Minute" if minute else "Vor dem Spiel"
+
+        # Immer explizit befüllen – unabhängig vom event_type
+        event_lines = [
+            f"Ereignistyp: {event_type}",
+            f"Detail: {event_detail}",
+        ]
+        if player_name:
+            event_lines.append(f"Spieler: {player_name}")
+        if assist_name:
+            # Bei Substitution ist assist_name der eingewechselte Spieler
+            label = "Eingewechselt für" if event_type == "subst" else "Vorlagengeber"
+            event_lines.append(f"{label}: {assist_name}")
+        if team_name:
+            event_lines.append(f"Team: {team_name}")
+
+        event_info = "\n".join(event_lines)
+
+        # Zusätzlicher Kontext (z.B. Pre-Match, Live-Stats)
         context_str = self._build_context_str(event_type, context_data)
+
+        style_hint = ""
+        if not minute and event_type.startswith("pre_match"):
+            style_hint = (
+                "Schreibe lebendig, abwechslungsreich und journalistisch – "
+                "nutze die Fakten aber formuliere wie ein erfahrener Sportreporter, "
+                "nicht wie eine trockene Auflistung. Variiere Satzbau und Einstieg.\n"
+            )
 
         return f"""Du bist ein Fußball-Liveticker-Redakteur. Schreibe einen kurzen Ticker-Eintrag (1-2 Sätze) auf {lang}.
 
 Stil: {style_desc}
-Ereignis: {event_type}
-Minute: {minute if minute else "Vor dem Spiel"}
+Minute: {minute_str}
+{style_hint}
+{event_info}
 {context_str}
-
 Schreibe nur den Ticker-Text, keine Erklärungen."""
 
     def _build_context_str(self, event_type: str, context_data: Optional[dict]) -> str:
@@ -193,14 +218,14 @@ Schreibe nur den Ticker-Text, keine Erklärungen."""
                 f"Clean Sheets: {context_data.get('clean_sheets')}"
             )
 
-        elif event_type in ("Goal", "goal"):
+        elif event_type == "live_stats_update":
             return (
-                f"Torschütze: {context_data.get('player_name', 'unbekannt')}\n"
-                f"Vorlagengeber: {context_data.get('assist', '-')}\n"
-                f"Team: {context_data.get('team_name', 'unbekannt')}"
+                f"Team: {context_data.get('team_name', 'unbekannt')}\n"
+                f"Heim: {context_data.get('home_team')} vs Auswärts: {context_data.get('away_team')}\n"
+                f"Auslöser: {', '.join(context_data.get('triggers', []))}\n"
+                f"Aktuelle Stats: {context_data.get('curr_stats', {})}"
             )
 
-        # Fallback: rohe JSON-Daten
         import json
 
         return (
@@ -219,8 +244,6 @@ Schreibe nur den Ticker-Text, keine Erklärungen."""
         language,
         context_data=None,
     ) -> str:
-        from google import genai
-
         prompt = self._build_prompt(
             event_type,
             event_detail,
@@ -296,7 +319,7 @@ Schreibe nur den Ticker-Text, keine Erklärungen."""
                     f"Tor durch {player_name} - das hätte verhindert werden müssen.",
                 ]
             text = random.choice(templates)
-            if assist_name and assist_name != "null":
+            if assist_name:
                 text += f" Vorlage: {assist_name}."
             return text
 
@@ -367,10 +390,12 @@ async def generate_ticker_text(
     provider: str = None,
     model: str = None,
 ) -> tuple[str, str]:
+    resolved_minute = (match_context.get("minute") if match_context else None) or minute
+
     text = llm_service.generate_ticker_text(
         event_type=event_type,
         event_detail=event_detail,
-        minute=minute,
+        minute=resolved_minute,
         player_name=player_name,
         assist_name=assist_name,
         team_name=team_name

@@ -16,6 +16,7 @@ from app.models.match import Match
 from app.models.event import Event
 from app.models.ticker_entry import TickerEntry
 from app.models.user_favorite import UserFavorite
+from app.models.synthetic_event import SyntheticEvent
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

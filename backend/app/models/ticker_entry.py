@@ -1,17 +1,9 @@
-# app/models/ticker_entry.py
-"""
-SQLAlchemy Model für Ticker-Entries-Tabelle.
-Speichert generierte Liveticker-Texte (KI oder manuell).
-"""
-
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
 class TickerEntry(Base):
-    """TickerEntry Model - Generierte Liveticker-Texte."""
-
     __tablename__ = "ticker_entries"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -29,16 +21,16 @@ class TickerEntry(Base):
     )
     minute = Column(Integer, nullable=False)
     text = Column(Text, nullable=False)
-    mode = Column(String(20), nullable=False)  # 'auto', 'hybrid', 'manual'
-    style = Column(String(20), nullable=True)  # 'neutral', 'euphorisch', 'kritisch'
-    language = Column(String(5), default="de")  # 'de', 'en', 'es', 'ja'
-    llm_model = Column(String(50), nullable=True)  # 'gpt-4', 'claude-sonnet-4'
-    prompt_used = Column(Text, nullable=True)  # Für Evaluation
-    approved_by = Column(Integer, nullable=True)  # User-ID (später)
+    icon = Column(String(10), nullable=True)  # ← neu
+    mode = Column(String(20), nullable=False)
+    style = Column(String(20), nullable=True)
+    language = Column(String(5), default="de")
+    llm_model = Column(String(50), nullable=True)
+    prompt_used = Column(Text, nullable=True)
+    approved_by = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     published_at = Column(DateTime(timezone=True), nullable=True)
 
-    # Relationships
     match = relationship("Match", backref="ticker_entries")
     event = relationship("Event", backref="ticker_entries")
     synthetic_event = relationship("SyntheticEvent", backref="ticker_entries")
