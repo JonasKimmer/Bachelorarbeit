@@ -408,17 +408,32 @@ export default function LiveTicker() {
     [selLSId, leagueSeasons],
   );
 
+  const liveIntervalRef = React.useRef(null);
+
   const handleTabMatches = useCallback(async (tab) => {
     setActiveTab(tab);
-    let res;
-    if (tab === "heute") res = await api.fetchTodayMatches();
-    else if (tab === "live") res = await api.fetchLiveMatches();
-    else if (tab === "favoriten") res = await api.fetchFavoriteMatches();
-    if (res) {
-      setMatches(res.data);
-      if (res.data.length > 0) setSelMatchId(res.data[0].id);
+    clearInterval(liveIntervalRef.current);
+
+    const load = async () => {
+      let res;
+      if (tab === "heute") res = await api.fetchTodayMatches();
+      else if (tab === "live") res = await api.fetchLiveMatches();
+      else if (tab === "favoriten") res = await api.fetchFavoriteMatches();
+      if (res) {
+        setMatches(res.data);
+        setSelMatchId(
+          (prev) => prev || (res.data.length > 0 ? res.data[0].id : null),
+        );
+      }
+    };
+
+    await load();
+    if (tab === "live") {
+      liveIntervalRef.current = setInterval(load, 10000);
     }
   }, []);
+
+  useEffect(() => () => clearInterval(liveIntervalRef.current), []);
 
   const toggleFav = useCallback(
     async (teamId) => {
@@ -637,7 +652,19 @@ export default function LiveTicker() {
                 onChange={(e) => setManualText(e.target.value)}
                 rows={2}
               />
-              <button className="btn-send" onClick={() => setManualText("")}>
+              <button
+                className="btn-send"
+                onClick={async () => {
+                  if (!manualText.trim()) return;
+                  try {
+                    await api.createManualTicker(selMatchId, manualText.trim());
+                    setManualText("");
+                    await reload.loadTickerTexts();
+                  } catch {
+                    alert("Fehler beim Speichern");
+                  }
+                }}
+              >
                 Senden
               </button>
             </div>
