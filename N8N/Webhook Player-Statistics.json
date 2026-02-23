@@ -1,0 +1,170 @@
+{
+  "name": "Webhook Player-Statistics",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "Player-Statistics",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "727ee179-e962-4cab-a8fe-16fafe0d710b",
+      "name": "Webhook Player-Statistics",
+      "webhookId": "6188adc1-362c-45e1-9e8a-abd1889bbe3b"
+    },
+    {
+      "parameters": {
+        "url": "https://v3.football.api-sports.io/fixtures/players?fixture=1388500",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fixture",
+              "value": "1388500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        528,
+        448
+      ],
+      "id": "59420939-494c-413d-8b46-4824a620da54",
+      "name": "API: Player-Statistics1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nw1wvLZ4u2BCZRVl",
+          "name": "Header Auth account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "https://v3.football.api-sports.io/fixtures/players?fixture={{ $json.body.fixture_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fixture",
+              "value": "={{ $json.body.fixture_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        0
+      ],
+      "id": "b0d6af5c-fbf0-4a87-830f-c6fc32b317c6",
+      "name": "API: Player-Statistics",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nw1wvLZ4u2BCZRVl",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.flatMap(item => {\n  if (!item.json.response) return [];\n  const fixtureId = item.json.parameters?.fixture;\n\n  return item.json.response.flatMap(teamData => {\n    return teamData.players.map(playerData => {\n      const p = playerData.player;\n      const s = playerData.statistics[0];\n      if (!s) return null;\n\n      const g = s.games || {};\n      const goals = s.goals || {};\n      const passes = s.passes || {};\n      const shots = s.shots || {};\n      const tackles = s.tackles || {};\n      const duels = s.duels || {};\n      const dribbles = s.dribbles || {};\n      const fouls = s.fouls || {};\n      const cards = s.cards || {};\n      const penalty = s.penalty || {};\n\n      return {\n        json: {\n          fixture_id: fixtureId,\n          team_external_id: teamData.team.id,\n          player_id: p.id,\n          player_name: p.name,\n          player_photo: p.photo,\n          minutes_played: g.minutes || 0,\n          number: g.number || null,\n          position: g.position || null,\n          rating: g.rating ? parseFloat(g.rating) : null,\n          captain: g.captain || false,\n          substitute: g.substitute || false,\n          offsides: s.offsides || null,\n          shots_total: shots.total || null,\n          shots_on: shots.on || null,\n          goals_total: goals.total || 0,\n          goals_conceded: goals.conceded || null,\n          goals_assists: goals.assists || 0,\n          goals_saves: goals.saves || null,\n          passes_total: passes.total || null,\n          passes_key: passes.key || null,\n          passes_accuracy: passes.accuracy ? parseInt(passes.accuracy) : null,\n          tackles_total: tackles.total || null,\n          tackles_blocks: tackles.blocks || null,\n          tackles_interceptions: tackles.interceptions || null,\n          duels_total: duels.total || null,\n          duels_won: duels.won || null,\n          dribbles_attempts: dribbles.attempts || null,\n          dribbles_success: dribbles.success || null,\n          dribbles_past: dribbles.past || null,\n          fouls_drawn: fouls.drawn || null,\n          fouls_committed: fouls.committed || null,\n          cards_yellow: cards.yellow || 0,\n          cards_red: cards.red || 0,\n          penalty_won: penalty.won || null,\n          penalty_committed: penalty.commited || null,\n          penalty_scored: penalty.scored || 0,\n          penalty_missed: penalty.missed || 0,\n          penalty_saved: penalty.saved || null\n        }\n      };\n    }).filter(Boolean);\n  });\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "52734191-d03e-4d9c-8e2a-e1adf39375e2",
+      "name": "Player-Statistics extrahieren"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO player_statistics (\n  match_id, team_id, player_id, player_name, player_photo,\n  minutes_played, number, position, rating, captain, substitute,\n  offsides, shots_total, shots_on,\n  goals_total, goals_conceded, goals_assists, goals_saves,\n  passes_total, passes_key, passes_accuracy,\n  tackles_total, tackles_blocks, tackles_interceptions,\n  duels_total, duels_won,\n  dribbles_attempts, dribbles_success, dribbles_past,\n  fouls_drawn, fouls_committed,\n  cards_yellow, cards_red,\n  penalty_won, penalty_committed, penalty_scored, penalty_missed, penalty_saved\n)\nVALUES (\n  (SELECT id FROM matches WHERE external_id = {{ $json.fixture_id }}::integer),\n  (SELECT id FROM teams WHERE external_id = {{ $json.team_external_id }}),\n  {{ $json.player_id }},\n  '{{ $json.player_name }}',\n  '{{ $json.player_photo }}',\n  {{ $json.minutes_played }},\n  {{ $json.number }},\n  '{{ $json.position }}',\n  {{ $json.rating }},\n  {{ $json.captain }},\n  {{ $json.substitute }},\n  {{ $json.offsides }},\n  {{ $json.shots_total }},\n  {{ $json.shots_on }},\n  {{ $json.goals_total }},\n  {{ $json.goals_conceded }},\n  {{ $json.goals_assists }},\n  {{ $json.goals_saves }},\n  {{ $json.passes_total }},\n  {{ $json.passes_key }},\n  {{ $json.passes_accuracy }},\n  {{ $json.tackles_total }},\n  {{ $json.tackles_blocks }},\n  {{ $json.tackles_interceptions }},\n  {{ $json.duels_total }},\n  {{ $json.duels_won }},\n  {{ $json.dribbles_attempts }},\n  {{ $json.dribbles_success }},\n  {{ $json.dribbles_past }},\n  {{ $json.fouls_drawn }},\n  {{ $json.fouls_committed }},\n  {{ $json.cards_yellow }},\n  {{ $json.cards_red }},\n  {{ $json.penalty_won }},\n  {{ $json.penalty_committed }},\n  {{ $json.penalty_scored }},\n  {{ $json.penalty_missed }},\n  {{ $json.penalty_saved }}\n)\nON CONFLICT (match_id, player_id) DO UPDATE SET\n  rating = EXCLUDED.rating,\n  minutes_played = EXCLUDED.minutes_played,\n  goals_total = EXCLUDED.goals_total,\n  goals_assists = EXCLUDED.goals_assists,\n  updated_at = NOW()",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1232,
+        0
+      ],
+      "id": "e30a8eda-1f82-46b6-b047-cb349d3dcf52",
+      "name": "Insert Player-Statistics",
+      "credentials": {
+        "postgres": {
+          "id": "DpV9uZoIFOsBDj7t",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Player-Statistics": {
+      "main": [
+        [
+          {
+            "node": "API: Player-Statistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: Player-Statistics1": {
+      "main": [
+        []
+      ]
+    },
+    "API: Player-Statistics": {
+      "main": [
+        [
+          {
+            "node": "Player-Statistics extrahieren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Player-Statistics extrahieren": {
+      "main": [
+        [
+          {
+            "node": "Insert Player-Statistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "fd46d815-f717-42e7-9715-9ceab7ea2f9c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c812d7c91145a37daf0cb923fa307183fa91637fdbe8017dda5dce71e0f572b5"
+  },
+  "id": "n2THSWhe4AV2k6zQ",
+  "tags": []
+}

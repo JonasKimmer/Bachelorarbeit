@@ -1,0 +1,688 @@
+{
+  "name": "Live_stats_worklow_LLM",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO synthetic_events (match_id, event_type, severity, context_data)\nVALUES (\n  (SELECT id FROM matches WHERE external_id = {{ $json.fixture_id }}),\n  'pre_match_injuries', 'medium', '{{ JSON.stringify($json) }}'::jsonb\n)\nON CONFLICT DO NOTHING\nRETURNING id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1200,
+        48
+      ],
+      "id": "a91a6f60-f4cc-4ed2-88d4-b22a9048b618",
+      "name": "Insert Events2",
+      "credentials": {
+        "postgres": {
+          "id": "DpV9uZoIFOsBDj7t",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://v3.football.api-sports.io/injuries",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fixture",
+              "value": "=1388500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        608,
+        16
+      ],
+      "id": "f5870bf4-6206-4fde-8b02-e2f107a61157",
+      "name": "API: Injuries abrufen1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nw1wvLZ4u2BCZRVl",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.first().json.response;\nconst fixtureId = $input.first().json.parameters?.fixture;\n\nconst grouped = {};\n\nfor (const entry of items) {\n  const teamId = entry.team.id;\n  const teamName = entry.team.name;\n\n  if (!grouped[teamId]) {\n    grouped[teamId] = {\n      team_id: teamId,\n      team_name: teamName,\n      players: []\n    };\n  }\n\n  grouped[teamId].players.push({\n    player_id: entry.player.id,\n    player_name: entry.player.name,\n    type: entry.player.type,\n    reason: entry.player.reason\n  });\n}\n\nreturn Object.values(grouped).map(team => ({ \n  json: {\n    fixture_id: fixtureId,\n    ...team\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        16
+      ],
+      "id": "2c6a93f5-6be8-4860-9042-366bc81ec347",
+      "name": "Injuries extrahieren"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1680,
+        48
+      ],
+      "id": "aa6541ad-888b-4463-a9ea-7af3191c04b5",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8000/api/v1/ticker/generate-synthetic",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"synthetic_event_id\": {{ $json.id }},\n  \"style\": \"neutral\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        64
+      ],
+      "id": "d651bd58-2efe-46ff-83ce-b0067cea5da4",
+      "name": "LLM Trigger Node1",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT m.id as match_id, m.external_id as fixture_id, m.status, m.minute, \n       ht.name as home_team, at.name as away_team \nFROM matches m \nJOIN teams ht ON ht.id = m.home_team_id \nJOIN teams at ON at.id = m.away_team_id \nWHERE m.match_date::date = CURRENT_DATE;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -16,
+        160
+      ],
+      "id": "d3c3f64d-192c-45f0-85d5-4687028ba5c4",
+      "name": "Insert Events",
+      "credentials": {
+        "postgres": {
+          "id": "DpV9uZoIFOsBDj7t",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://v3.football.api-sports.io/fixtures/statistics?fixture={external_id}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fixture",
+              "value": "={{ $json.body.external_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        192
+      ],
+      "id": "f9e09f14-1ab7-4b4e-adc2-22c44c5fe744",
+      "name": "API: Injuries abrufen",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nw1wvLZ4u2BCZRVl",
+          "name": "Header Auth account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT m.id as match_id, m.external_id as fixture_id, m.status, m.minute, \n       ht.name as home_team, at.name as away_team \nFROM matches m \nJOIN teams ht ON ht.id = m.home_team_id \nJOIN teams at ON at.id = m.away_team_id \nWHERE m.status = 'live';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        960,
+        512
+      ],
+      "id": "c40ec836-29d5-4f5e-8107-aff3e326764a",
+      "name": "Aktive Spiele laden",
+      "credentials": {
+        "postgres": {
+          "id": "DpV9uZoIFOsBDj7t",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-results",
+              "leftValue": "={{ $json.match_id }}",
+              "rightValue": "exists",
+              "operator": {
+                "type": "number",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1264,
+        512
+      ],
+      "id": "07c4ac2c-bae8-4ddc-9a23-5f55f2dab267",
+      "name": "Spiele vorhanden?"
+    },
+    {
+      "parameters": {
+        "url": "https://v3.football.api-sports.io/fixtures/statistics",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fixture",
+              "value": "={{ $json.fixture_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1520,
+        512
+      ],
+      "id": "8eeaf7e4-69e5-47e4-bdc1-4c81d680be42",
+      "name": "API: Statistiken abrufen",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nw1wvLZ4u2BCZRVl",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT ms.team_id, t.external_id as team_external_id,\n       ms.shots_on_goal, ms.total_shots, ms.ball_possession,\n       ms.corner_kicks, ms.fouls\nFROM match_statistics ms\nJOIN teams t ON t.id = ms.team_id\nWHERE ms.match_id = {{ $('Aktive Spiele laden').item.json.match_id }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1760,
+        528
+      ],
+      "id": "8ec68ae9-2f24-4a92-b3fc-82ab8954556d",
+      "name": "Vorherige Stats laden",
+      "credentials": {
+        "postgres": {
+          "id": "DpV9uZoIFOsBDj7t",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const matchData = $('Aktive Spiele laden').first().json;\nconst apiResponse = $('API: Statistiken abrufen').first().json.response ?? [];\nif (!apiResponse.length) return [{ json: { skip: true } }];\n\nconst prevStats = [];\ntry {\n  const raw = $('Vorherige Stats laden').all().map(i => i.json);\n  if (raw.length > 0 && raw[0].team_id) prevStats.push(...raw);\n} catch (e) {}\n\nif (prevStats.length === 0) return [{ json: { skip: true } }];\n\nconst getVal = (stats, type) => {\n  const entry = stats.find(s => s.type === type);\n  if (!entry || entry.value === null) return 0;\n  const v = String(entry.value).replace('%', '');\n  return parseFloat(v) || 0;\n};\n\nconst events = [];\nfor (const teamData of apiResponse) {\n  const teamId = teamData.team.id;\n  const teamName = teamData.team.name;\n  const stats = teamData.statistics;\n  const curr = {\n    shots_on_goal:   getVal(stats, 'Shots on Goal'),\n    total_shots:     getVal(stats, 'Total Shots'),\n    ball_possession: getVal(stats, 'Ball Possession'),\n    corner_kicks:    getVal(stats, 'Corner Kicks'),\n    fouls:           getVal(stats, 'Fouls'),\n    passes_pct:      getVal(stats, 'Passes %'),\n  };\n  const prev = prevStats.find(p => p.team_external_id === teamId) || {};\n  const delta = {\n    shots_on_goal:   curr.shots_on_goal   - (prev.shots_on_goal   || 0),\n    total_shots:     curr.total_shots     - (prev.total_shots     || 0),\n    ball_possession: curr.ball_possession - (prev.ball_possession || 0),\n    corner_kicks:    curr.corner_kicks    - (prev.corner_kicks    || 0),\n    fouls:           curr.fouls           - (prev.fouls           || 0),\n  };\n\n  const triggers = [];\n  if (delta.shots_on_goal >= 1) triggers.push(`+${delta.shots_on_goal} Schuss aufs Tor`);\n  if (delta.total_shots >= 2)   triggers.push(`+${delta.total_shots} Schüsse gesamt`);\n  if (Math.abs(delta.ball_possession) >= 5) triggers.push(`Ballbesitz-Shift: ${delta.ball_possession > 0 ? '+' : ''}${delta.ball_possession}%`);\n  if (delta.corner_kicks >= 1)  triggers.push(`+${delta.corner_kicks} Eckball`);\n  if (delta.fouls >= 1)         triggers.push(`+${delta.fouls} Foul`);\n\n  if (triggers.length > 0) {\n    events.push({\n      json: {\n        match_id:   matchData.match_id,\n        fixture_id: matchData.fixture_id,\n        team_id:    teamId,\n        team_name:  teamName,\n        home_team:  matchData.home_team,\n        away_team:  matchData.away_team,\n        triggers,\n        curr_stats: curr,\n        delta,\n        description: triggers.join(', '),\n      }\n    });\n  }\n}\n\nreturn events.length > 0 ? events : [{ json: { skip: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        512
+      ],
+      "id": "42eaa7c6-a4fe-4e93-8e32-dd3b36b98d39",
+      "name": "Stats vergleichen & Schwellwerte prüfen"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "no-skip",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": "exists",
+              "operator": {
+                "type": "boolean",
+                "operation": "notExists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        2576,
+        512
+      ],
+      "id": "114247ee-0ff4-4d78-ae88-90ac4e2b6e07",
+      "name": "Schwellwert überschritten?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO synthetic_events (match_id, team_id, event_type, severity, context_data)\nSELECT \n  {{ $json.match_id }},\n  t.id,\n  'live_stats_update',\n  'medium',\n  '{{ JSON.stringify($json).replace(/'/g, \"''\") }}'::jsonb\nFROM teams t\nWHERE t.external_id = {{ $json.team_id }}\nRETURNING id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2880,
+        512
+      ],
+      "id": "40dee15d-f558-4a26-a64e-302bc2af5c84",
+      "name": "Synthetic Event speichern",
+      "credentials": {
+        "postgres": {
+          "id": "DpV9uZoIFOsBDj7t",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/api/v1/ticker/generate-synthetic",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ synthetic_event_id: $json.id, style: 'neutral' }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3184,
+        512
+      ],
+      "id": "31b1cdb6-307b-4f1c-9bfd-084d16464c43",
+      "name": "LLM Ticker generieren",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nw1wvLZ4u2BCZRVl",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO synthetic_events (match_id, team_id, event_type, severity, context_data, minute)\nSELECT \n  {{ $json.match_id }},\n  t.id,\n  'live_stats_update',\n  'medium',\n  '{{ JSON.stringify($json).replace(/'/g, \"''\") }}'::jsonb,\n  {{ $json.minute !== undefined ? $json.minute : 'NULL' }}\nFROM teams t\nWHERE t.external_id = {{ $json.team_external_id }}\nRETURNING id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2208,
+        512
+      ],
+      "id": "4b08143e-d8c7-43c9-a99d-c1fd49622894",
+      "name": "Synthetic Event speichern1",
+      "credentials": {
+        "postgres": {
+          "id": "DpV9uZoIFOsBDj7t",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "import-prematch",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        608,
+        512
+      ],
+      "id": "94eff71c-bff9-46cd-ad7a-ea075085cc32",
+      "name": "Webhook import Live-Staticts",
+      "webhookId": "6188adc1-362c-45e1-9e8a-abd1889bbe3b"
+    },
+    {
+      "parameters": {
+        "jsCode": "const matchData = $('Aktive Spiele laden').first().json;\nconst apiResponse = $('API: Statistiken abrufen').first().json.response ?? [];\n\nconst getVal = (stats, type) => {\n  const entry = stats.find(s => s.type === type);\n  if (!entry || entry.value === null) return null;\n  const v = String(entry.value).replace('%', '');\n  return parseInt(v) || null;\n};\n\nreturn apiResponse.map(teamData => ({\n  json: {\n    match_id:          matchData.match_id,\n    team_external_id:  teamData.team.id,\n    shots_on_goal:     getVal(teamData.statistics, 'Shots on Goal'),\n    shots_off_goal:    getVal(teamData.statistics, 'Shots off Goal'),\n    total_shots:       getVal(teamData.statistics, 'Total Shots'),\n    blocked_shots:     getVal(teamData.statistics, 'Blocked Shots'),\n    shots_insidebox:   getVal(teamData.statistics, 'Shots insidebox'),\n    shots_outsidebox:  getVal(teamData.statistics, 'Shots outsidebox'),\n    fouls:             getVal(teamData.statistics, 'Fouls'),\n    corner_kicks:      getVal(teamData.statistics, 'Corner Kicks'),\n    offsides:          getVal(teamData.statistics, 'Offsides'),\n    ball_possession:   getVal(teamData.statistics, 'Ball Possession'),\n    yellow_cards:      getVal(teamData.statistics, 'Yellow Cards'),\n    red_cards:         getVal(teamData.statistics, 'Red Cards'),\n    goalkeeper_saves:  getVal(teamData.statistics, 'Goalkeeper Saves'),\n    total_passes:      getVal(teamData.statistics, 'Total passes'),\n    passes_accurate:   getVal(teamData.statistics, 'Passes accurate'),\n    passes_percentage: getVal(teamData.statistics, 'Passes %'),\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        512
+      ],
+      "id": "75b54ebf-7f7f-4e5c-a79a-7a01565087ab",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "url": "https://v3.football.api-sports.io/fixtures",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.fixture_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1360,
+        816
+      ],
+      "id": "616755b3-869a-48a2-9a83-e9f5e91db377",
+      "name": "API: Minute abrufen1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nw1wvLZ4u2BCZRVl",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE matches\nSET minute = {{ $json.response[0].fixture.status.elapsed }},\n    status = '{{ $json.response[0].fixture.status.short }}'\nWHERE external_id = {{ $('Aktive Spiele laden').item.json.fixture_id }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1696,
+        832
+      ],
+      "id": "77ccc430-6370-4292-b4a7-8432b4328076",
+      "name": "Minute laden1",
+      "credentials": {
+        "postgres": {
+          "id": "DpV9uZoIFOsBDj7t",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, external_id, status, minute FROM matches WHERE status IN ('1H','2H','HT');",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1792,
+        1104
+      ],
+      "id": "69c41a9e-517b-44ea-a07f-3b26d3dcca4e",
+      "name": "Minute laden",
+      "credentials": {
+        "postgres": {
+          "id": "DpV9uZoIFOsBDj7t",
+          "name": "Postgres account"
+        }
+      },
+      "disabled": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Insert Events2": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "API: Injuries abrufen1": {
+      "main": [
+        [
+          {
+            "node": "Injuries extrahieren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Injuries extrahieren": {
+      "main": [
+        [
+          {
+            "node": "Insert Events2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "LLM Trigger Node1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: Injuries abrufen": {
+      "main": [
+        [
+          {
+            "node": "API: Injuries abrufen1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Events": {
+      "main": [
+        [
+          {
+            "node": "API: Injuries abrufen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aktive Spiele laden": {
+      "main": [
+        [
+          {
+            "node": "API: Minute abrufen1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Spiele vorhanden?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Spiele vorhanden?": {
+      "main": [
+        [
+          {
+            "node": "API: Statistiken abrufen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: Statistiken abrufen": {
+      "main": [
+        [
+          {
+            "node": "Vorherige Stats laden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vorherige Stats laden": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stats vergleichen & Schwellwerte prüfen": {
+      "main": [
+        [
+          {
+            "node": "Schwellwert überschritten?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schwellwert überschritten?": {
+      "main": [
+        [
+          {
+            "node": "Synthetic Event speichern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synthetic Event speichern": {
+      "main": [
+        [
+          {
+            "node": "LLM Ticker generieren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synthetic Event speichern1": {
+      "main": [
+        [
+          {
+            "node": "Stats vergleichen & Schwellwerte prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook import Live-Staticts": {
+      "main": [
+        [
+          {
+            "node": "Aktive Spiele laden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Synthetic Event speichern1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: Minute abrufen1": {
+      "main": [
+        [
+          {
+            "node": "Minute laden1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "ec2e14db-e0de-447d-bc4b-e5b70ce1d64a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c812d7c91145a37daf0cb923fa307183fa91637fdbe8017dda5dce71e0f572b5"
+  },
+  "id": "IlujyUa0ufsTuoW7",
+  "tags": []
+}

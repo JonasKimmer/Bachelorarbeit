@@ -1,0 +1,162 @@
+{
+  "name": "Webhook Matches-aufrufen",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "import-matches",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1152,
+        400
+      ],
+      "id": "6e9002e7-c042-4d85-9d7e-f22ab7f9cace",
+      "name": "Webhook import-matches",
+      "webhookId": "a5ffe4b6-1e02-4300-b287-d0c4ecb7b5b3"
+    },
+    {
+      "parameters": {
+        "url": "https://v3.football.api-sports.io/fixtures",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "league",
+              "value": "={{ $json.body.league_id }}"
+            },
+            {
+              "name": "season",
+              "value": "={{ $json.body.season }}"
+            },
+            {
+              "name": "round",
+              "value": "={{ $json.body.round }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -832,
+        400
+      ],
+      "id": "32d9a61d-a965-4fc3-84d2-68247139850d",
+      "name": "API: Matches abrufen",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nw1wvLZ4u2BCZRVl",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.flatMap(item => {\n  if (!item.json.response || item.json.response.length === 0) return [];\n\n  const league_id = parseInt(item.json.parameters?.league);\n  const season = parseInt(item.json.parameters?.season);\n\n  return item.json.response.map(fixture => ({\n    json: {\n      external_id: fixture.fixture.id,\n      league_id,\n      season,\n      home_team_external_id: fixture.teams.home.id,\n      away_team_external_id: fixture.teams.away.id,\n      match_date: fixture.fixture.date,\n      round: fixture.league.round,\n      status: fixture.fixture.status.short === 'FT' ? 'finished' :\n              ['1H','2H','HT','ET','P'].includes(fixture.fixture.status.short) ? 'live' : 'scheduled',\n      score_home: fixture.goals.home ?? 0,\n      score_away: fixture.goals.away ?? 0\n    }\n  }));\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -288,
+        400
+      ],
+      "id": "c3a260e6-a42e-4a3b-9937-14b77ce53281",
+      "name": "Matches extrahieren1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO matches (external_id, league_season_id, home_team_id, away_team_id, match_date, round, status, score_home, score_away)\nVALUES (\n  {{ $json.external_id }},\n  (SELECT ls.id FROM league_seasons ls\n   JOIN leagues l ON l.id = ls.league_id\n   JOIN seasons s ON s.id = ls.season_id\n   WHERE l.external_id = {{ $json.league_id }}\n   AND s.year = {{ $json.season }}),\n  (SELECT id FROM teams WHERE external_id = {{ $json.home_team_external_id }}),\n  (SELECT id FROM teams WHERE external_id = {{ $json.away_team_external_id }}),\n  '{{ $json.match_date }}',\n  '{{ $json.round }}',\n  '{{ $json.status }}',\n  {{ $json.score_home }},\n  {{ $json.score_away }}\n)\nON CONFLICT (external_id) DO UPDATE SET\n  status = EXCLUDED.status,\n  score_home = EXCLUDED.score_home,\n  score_away = EXCLUDED.score_away",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        400
+      ],
+      "id": "e9df2c3d-735e-4748-9bbe-f7fe0fcca661",
+      "name": "Insert Matches1",
+      "credentials": {
+        "postgres": {
+          "id": "DpV9uZoIFOsBDj7t",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM matches LIMIT 5;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        752
+      ],
+      "id": "5f404beb-c1ca-4c21-876d-8d58968a65a6",
+      "name": "Insert Matches",
+      "credentials": {
+        "postgres": {
+          "id": "DpV9uZoIFOsBDj7t",
+          "name": "Postgres account"
+        }
+      },
+      "disabled": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook import-matches": {
+      "main": [
+        [
+          {
+            "node": "API: Matches abrufen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: Matches abrufen": {
+      "main": [
+        [
+          {
+            "node": "Matches extrahieren1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Matches extrahieren1": {
+      "main": [
+        [
+          {
+            "node": "Insert Matches1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e919f1cc-0e6f-4e3e-b864-0ae94cc617c7",
+  "meta": {
+    "instanceId": "c812d7c91145a37daf0cb923fa307183fa91637fdbe8017dda5dce71e0f572b5"
+  },
+  "id": "MpH9ak8kuZqs0ZsF",
+  "tags": []
+}

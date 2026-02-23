@@ -1,0 +1,234 @@
+{
+  "name": "Webhook Events  (Live-Ticker)",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO events (\n  match_id, minute, extra_time, team_id,\n  player_id, player_name, assist_id, assist_name,\n  type, detail, comments\n)\nVALUES (\n  (SELECT id FROM matches WHERE external_id = {{ $json.fixture_id }}::integer),\n  {{ $json.minute }},\n  {{ $json.extra_time }},\n  (SELECT id FROM teams WHERE external_id = {{ $json.team_external_id }}),\n  {{ $json.player_id }},\n  '{{ $json.player_name }}',\n  {{ $json.assist_id }},\n  '{{ $json.assist_name }}',\n  '{{ $json.type }}',\n  '{{ $json.detail }}',\n  {{ $json.comments !== null ? \"'\" + $json.comments + \"'\" : 'NULL' }}\n)\nON CONFLICT (match_id, minute, player_id, type) DO NOTHING\nRETURNING id, type, detail, minute, player_name, assist_name, team_id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1232,
+        0
+      ],
+      "id": "f0fe7b94-4a9a-42bc-a8c2-ad158124b9d0",
+      "name": "Insert Events",
+      "credentials": {
+        "postgres": {
+          "id": "DpV9uZoIFOsBDj7t",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.flatMap(item => {\n  if (!item.json.response) return [];\n  const fixtureId = item.json.parameters?.fixture;\n\n  return item.json.response.map(event => ({\n    json: {\n      fixture_id: fixtureId,\n      minute: event.time.elapsed,\n      extra_time: event.time.extra || null,\n      team_external_id: event.team.id,\n      player_id: event.player?.id || null,\n      player_name: event.player?.name || null,\n      assist_id: event.assist?.id || null,\n      assist_name: event.assist?.name || null,\n      type: event.type,\n      detail: event.detail,\n      comments: event.comments || null\n    }\n  }));\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "303c9629-5a30-4d0b-a6a9-3c9e601d54f4",
+      "name": "Events extrahieren"
+    },
+    {
+      "parameters": {
+        "url": "https://v3.football.api-sports.io/fixtures/events",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fixture",
+              "value": "={{ $json.body.fixture_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        304,
+        0
+      ],
+      "id": "43a268a5-9a3b-44d0-908a-37316b92d913",
+      "name": "API: Events abrufen",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nw1wvLZ4u2BCZRVl",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "Events",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        48,
+        16
+      ],
+      "id": "d02f3e21-10ed-4615-ad27-60640f400653",
+      "name": "Webhook Events",
+      "webhookId": "6188adc1-362c-45e1-9e8a-abd1889bbe3b"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT external_id, status, match_date FROM matches WHERE external_id = 1515541;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1200,
+        288
+      ],
+      "id": "cb0610e9-d096-4cb3-8942-b7329d4705a4",
+      "name": "Insert Events1",
+      "credentials": {
+        "postgres": {
+          "id": "DpV9uZoIFOsBDj7t",
+          "name": "Postgres account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "63a0b1bf-cb83-4e1c-9b3a-e1e1a15e9da9",
+              "leftValue": "$json.id",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        0
+      ],
+      "id": "feb5ca53-2ffa-4e88-bda5-317b75ea0b11",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://host.docker.internal:8000/api/v1/ticker/generate/{{ $json.id }}?style=neutral",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        0
+      ],
+      "id": "14940bdb-1565-4553-8cc5-489dbc2c208b",
+      "name": "LLM Trigger Node1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nw1wvLZ4u2BCZRVl",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Events extrahieren": {
+      "main": [
+        [
+          {
+            "node": "Insert Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: Events abrufen": {
+      "main": [
+        [
+          {
+            "node": "Events extrahieren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Events": {
+      "main": [
+        [
+          {
+            "node": "API: Events abrufen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Events": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "LLM Trigger Node1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "78b30686-cbc3-4d8c-bd4f-684e1c1565c5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c812d7c91145a37daf0cb923fa307183fa91637fdbe8017dda5dce71e0f572b5"
+  },
+  "id": "tKSgIRxvg4fYXIvZ",
+  "tags": []
+}

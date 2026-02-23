@@ -1,0 +1,134 @@
+{
+  "name": "Webhook Lineup",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO lineups (\n  match_id, team_id, formation, coach_id, coach_name,\n  player_id, player_name, number, position, grid, is_substitute\n)\nVALUES (\n  (SELECT id FROM matches WHERE external_id = {{ $json.fixture_id }}),\n  (SELECT id FROM teams WHERE external_id = {{ $json.team_external_id }}),\n  '{{ $json.formation }}',\n  {{ $json.coach_id }},\n  '{{ $json.coach_name.replace(/'/g, \"''\") }}',\n  {{ $json.player_id }},\n  '{{ $json.player_name.replace(/'/g, \"''\") }}',\n  {{ $json.number }},\n  '{{ $json.position }}',\n  '{{ $json.grid }}',\n  {{ $json.is_substitute }}\n)\nON CONFLICT (match_id, player_id) DO NOTHING",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1232,
+        0
+      ],
+      "id": "975cd421-69a1-4a23-a40e-e089426b17bc",
+      "name": "Insert Lineup",
+      "credentials": {
+        "postgres": {
+          "id": "DpV9uZoIFOsBDj7t",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.flatMap(item => {\n  if (!item.json.response) return [];\n  const fixtureId = item.json.parameters?.fixture;\n\n  return item.json.response.flatMap(teamData => {\n    const formation = teamData.formation;\n    const coachId = teamData.coach?.id;\n    const coachName = teamData.coach?.name;\n\n    const players = [\n      ...teamData.startXI.map(p => ({ ...p.player, is_substitute: false })),\n      ...teamData.substitutes.map(p => ({ ...p.player, is_substitute: true }))\n    ];\n\n    return players.map(p => ({\n      json: {\n        fixture_id: fixtureId,\n        team_external_id: teamData.team.id,\n        formation,\n        coach_id: coachId,\n        coach_name: coachName,\n        player_id: p.id,\n        player_name: p.name,\n        number: p.number,\n        position: p.pos,\n        grid: p.grid,\n        is_substitute: p.is_substitute\n      }\n    }));\n  });\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "5bed3275-bb5e-4036-b2f9-cfa764957289",
+      "name": "Lineups extrahieren"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lineups",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -16,
+        0
+      ],
+      "id": "e6faace6-5bcb-4a05-a2f6-0abd288cb3f4",
+      "name": "Webhook Lineup",
+      "webhookId": "6188adc1-362c-45e1-9e8a-abd1889bbe3b"
+    },
+    {
+      "parameters": {
+        "url": "https://v3.football.api-sports.io/fixtures/lineups",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fixture",
+              "value": "={{ $json.body.fixture_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        336,
+        0
+      ],
+      "id": "50e08b34-27ef-4518-8342-bac4457cb0b1",
+      "name": "API: Lineup abrufen1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nw1wvLZ4u2BCZRVl",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Lineups extrahieren": {
+      "main": [
+        [
+          {
+            "node": "Insert Lineup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Lineup": {
+      "main": [
+        [
+          {
+            "node": "API: Lineup abrufen1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: Lineup abrufen1": {
+      "main": [
+        [
+          {
+            "node": "Lineups extrahieren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "3c00550b-3be5-4b56-bd01-87dce6f0eeac",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c812d7c91145a37daf0cb923fa307183fa91637fdbe8017dda5dce71e0f572b5"
+  },
+  "id": "Jm9q9Orzsjc242X1",
+  "tags": []
+}

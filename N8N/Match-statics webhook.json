@@ -1,0 +1,160 @@
+{
+  "name": "Match-statics webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://v3.football.api-sports.io/fixtures/statistics?fixture={{ $json.body.fixture_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fixture",
+              "value": "={{ $json.body.fixture_id}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        336,
+        0
+      ],
+      "id": "5adf27f5-59d7-4590-a1a3-b1023fb3d372",
+      "name": "API: Match-Statistics",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nw1wvLZ4u2BCZRVl",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://v3.football.api-sports.io/fixtures/statistics?fixture=1388500",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        544,
+        336
+      ],
+      "id": "cdf8f272-ac0f-422a-a1f7-e0333bbff930",
+      "name": "API: Match-Statistics1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nw1wvLZ4u2BCZRVl",
+          "name": "Header Auth account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.flatMap(item => {\n  if (!item.json.response) return [];\n  const fixtureId = item.json.parameters?.fixture;\n\n  return item.json.response.map(teamData => {\n    const stats = {};\n    \n    for (const stat of teamData.statistics) {\n      let value = stat.value;\n      if (value === null || value === undefined) value = 0;\n      if (typeof value === 'string') {\n        if (value.includes('%')) value = parseInt(value.replace('%', ''));\n        else if (value.includes('.')) value = Math.round(parseFloat(value));\n        else value = parseInt(value) || 0;\n      }\n      \n      const mapping = {\n        'Shots on Goal': 'shots_on_goal',\n        'Shots off Goal': 'shots_off_goal',\n        'Total Shots': 'total_shots',\n        'Blocked Shots': 'blocked_shots',\n        'Shots insidebox': 'shots_insidebox',\n        'Shots outsidebox': 'shots_outsidebox',\n        'Fouls': 'fouls',\n        'Corner Kicks': 'corner_kicks',\n        'Offsides': 'offsides',\n        'Ball Possession': 'ball_possession',\n        'Yellow Cards': 'yellow_cards',\n        'Red Cards': 'red_cards',\n        'Goalkeeper Saves': 'goalkeeper_saves',\n        'Total passes': 'total_passes',\n        'Passes accurate': 'passes_accurate',\n        'Passes %': 'passes_percentage'\n      };\n      \n      const col = mapping[stat.type];\n      if (col) stats[col] = value;\n    }\n\n    return {\n      json: {\n        fixture_id: fixtureId,\n        team_external_id: teamData.team.id,\n        ...stats\n      }\n    };\n  });\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "37e99096-df5e-4cb7-858c-b2b1d229ebee",
+      "name": "Match-Statistics extrahieren"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO match_statistics (\n  match_id, team_id,\n  shots_on_goal, shots_off_goal, total_shots, blocked_shots,\n  shots_insidebox, shots_outsidebox, fouls, corner_kicks,\n  offsides, ball_possession, yellow_cards, red_cards,\n  goalkeeper_saves, total_passes, passes_accurate, passes_percentage\n)\nVALUES (\n  (SELECT id FROM matches WHERE external_id = {{ $json.fixture_id }}::integer),\n  (SELECT id FROM teams WHERE external_id = {{ $json.team_external_id }}),\n  {{ $json.shots_on_goal || 0 }},\n  {{ $json.shots_off_goal || 0 }},\n  {{ $json.total_shots || 0 }},\n  {{ $json.blocked_shots || 0 }},\n  {{ $json.shots_insidebox || 0 }},\n  {{ $json.shots_outsidebox || 0 }},\n  {{ $json.fouls || 0 }},\n  {{ $json.corner_kicks || 0 }},\n  {{ $json.offsides || 0 }},\n  {{ $json.ball_possession || 0 }},\n  {{ $json.yellow_cards || 0 }},\n  {{ $json.red_cards || 0 }},\n  {{ $json.goalkeeper_saves || 0 }},\n  {{ $json.total_passes || 0 }},\n  {{ $json.passes_accurate || 0 }},\n  {{ $json.passes_percentage || 0 }}\n)\nON CONFLICT (match_id, team_id) DO UPDATE SET\n  shots_on_goal = EXCLUDED.shots_on_goal,\n  shots_off_goal = EXCLUDED.shots_off_goal,\n  total_shots = EXCLUDED.total_shots,\n  blocked_shots = EXCLUDED.blocked_shots,\n  shots_insidebox = EXCLUDED.shots_insidebox,\n  shots_outsidebox = EXCLUDED.shots_outsidebox,\n  fouls = EXCLUDED.fouls,\n  corner_kicks = EXCLUDED.corner_kicks,\n  offsides = EXCLUDED.offsides,\n  ball_possession = EXCLUDED.ball_possession,\n  yellow_cards = EXCLUDED.yellow_cards,\n  red_cards = EXCLUDED.red_cards,\n  goalkeeper_saves = EXCLUDED.goalkeeper_saves,\n  total_passes = EXCLUDED.total_passes,\n  passes_accurate = EXCLUDED.passes_accurate,\n  passes_percentage = EXCLUDED.passes_percentage,\n  updated_at = NOW()",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1232,
+        0
+      ],
+      "id": "b6539a6f-4b84-47b9-8e4e-eff885b2b940",
+      "name": "Insert Match-Statistics",
+      "credentials": {
+        "postgres": {
+          "id": "DpV9uZoIFOsBDj7t",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "Match-Statistics",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "4edbced9-ce6c-403b-a90d-bca59cc596a1",
+      "name": "Webhook Match-Statistics",
+      "webhookId": "6188adc1-362c-45e1-9e8a-abd1889bbe3b"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "API: Match-Statistics": {
+      "main": [
+        [
+          {
+            "node": "Match-Statistics extrahieren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: Match-Statistics1": {
+      "main": [
+        []
+      ]
+    },
+    "Match-Statistics extrahieren": {
+      "main": [
+        [
+          {
+            "node": "Insert Match-Statistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Match-Statistics": {
+      "main": [
+        [
+          {
+            "node": "API: Match-Statistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "fd3ffd83-8dfa-4674-bda2-a58f7922a6bb",
+  "meta": {
+    "instanceId": "c812d7c91145a37daf0cb923fa307183fa91637fdbe8017dda5dce71e0f572b5"
+  },
+  "id": "1KhOu6FYaAkMkAIz",
+  "tags": []
+}
