@@ -1,6 +1,3 @@
-# ----------------------------------------
-# app/repositories/ticker_entry_repository.py
-# ----------------------------------------
 from sqlalchemy.orm import Session
 from app.models.ticker_entry import TickerEntry
 from app.schemas.ticker_entry import TickerEntryCreate, TickerEntryUpdate
@@ -43,13 +40,23 @@ class TickerEntryRepository:
     def get_published(self, match_id: int) -> list[TickerEntry]:
         return (
             self.db.query(TickerEntry)
-            .filter(TickerEntry.match_id == match_id, TickerEntry.status == "published")
+            .filter(
+                TickerEntry.match_id == match_id,
+                TickerEntry.status == "published",
+            )
             .order_by(TickerEntry.minute.desc())
             .all()
         )
 
     def create(self, entry: TickerEntryCreate) -> TickerEntry:
-        db_entry = TickerEntry(**entry.model_dump())
+        data = entry.model_dump()
+
+        # Manuelle Einträge sofort publishen
+        if data.get("mode") == "manual" and data.get("status") == "draft":
+            data["status"] = "published"
+            data["published_at"] = datetime.now(timezone.utc)
+
+        db_entry = TickerEntry(**data)
         self.db.add(db_entry)
         self.db.commit()
         self.db.refresh(db_entry)

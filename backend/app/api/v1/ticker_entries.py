@@ -1,12 +1,3 @@
-"""
-Ticker Entries API Endpoints.
-GET /api/v1/ticker - Liste aller Ticker-Einträge
-GET /api/v1/ticker/match/{match_id} - Ticker für ein Match
-POST /api/v1/ticker - Neuer Ticker-Eintrag
-POST /api/v1/ticker/generate/{event_id} - Auto-Generierung
-POST /api/v1/ticker/{id}/publish - Eintrag veröffentlichen
-"""
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -80,7 +71,6 @@ def generate_ticker_for_event(
     team = team_repo.get_by_id(event.team_id)
     team_name = team.name if team else "Unknown Team"
 
-    # context_data für Goal-Events befüllen, damit _build_context_str greift
     context_data = None
     if event.type in ("Goal", "goal"):
         context_data = {
@@ -109,6 +99,7 @@ def generate_ticker_for_event(
         style=style,
         language="de",
         llm_model="mock" if llm_service.provider == "mock" else llm_service.provider,
+        status="published",  # ← direkt publishen
     )
 
     return ticker_repo.create(ticker_data)

@@ -1,7 +1,6 @@
-# app/api/v1/ticker.py
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
 
 from app.core.database import get_db
 from app.repositories.synthetic_event_repository import SyntheticEventRepository
@@ -30,7 +29,6 @@ def get_synthetic_events(match_id: int, db: Session = Depends(get_db)):
 
 @router.post("/synthetic", response_model=SyntheticEvent, status_code=201)
 def create_synthetic_event(data: SyntheticEventCreate, db: Session = Depends(get_db)):
-    """n8n schreibt synthetische Events direkt (ohne LLM-Generierung)."""
     repo = SyntheticEventRepository(db)
     return repo.create(data)
 
@@ -39,11 +37,6 @@ def create_synthetic_event(data: SyntheticEventCreate, db: Session = Depends(get
 async def generate_synthetic(
     req: GenerateSyntheticRequest, db: Session = Depends(get_db)
 ):
-    """
-    n8n triggert diesen Endpoint nach Pre-Match Workflow.
-    Liest context_data aus synthetic_event, generiert Ticker-Text via LLM,
-    speichert TickerEntry und gibt { ticker_entry_id, text } zurück.
-    """
     syn_repo = SyntheticEventRepository(db)
     match_repo = MatchRepository(db)
 
@@ -51,7 +44,6 @@ async def generate_synthetic(
     if not syn_event:
         raise HTTPException(status_code=404, detail="SyntheticEvent not found")
 
-    # Vor dem LLM-Aufruf prüfen ob bereits ein Entry existiert
     existing = (
         db.query(TickerEntry)
         .filter(TickerEntry.synthetic_event_id == req.synthetic_event_id)
@@ -101,6 +93,8 @@ async def generate_synthetic(
         style=req.style,
         language=req.language,
         llm_model=model_used,
+        status="published",  # ← neu
+        published_at=datetime.now(timezone.utc),  # ← neu
     )
     db.add(entry)
 
@@ -124,7 +118,6 @@ async def generate_synthetic(
     "/match/{match_id}/prematch", response_model=list[GenerateSyntheticResponse]
 )
 def get_prematch_entries(match_id: int, db: Session = Depends(get_db)):
-    """Get pre-match synthetic entries (predictions, injuries, head-to-head) for a match."""
     entries = (
         db.query(TickerEntry)
         .join(
@@ -159,7 +152,6 @@ def get_prematch_entries(match_id: int, db: Session = Depends(get_db)):
 
 @router.get("/match/{match_id}/live", response_model=list[GenerateSyntheticResponse])
 def get_live_entries(match_id: int, db: Session = Depends(get_db)):
-    """Get live ticker entries (live stats updates) for a match, ordered by latest first."""
     entries = (
         db.query(TickerEntry)
         .join(
@@ -235,6 +227,8 @@ async def generate_for_event(
         style=style,
         language="de",
         llm_model=model_used,
+        status="published",  # ← neu
+        published_at=datetime.now(timezone.utc),  # ← neu
     )
     db.add(entry)
     db.commit()
