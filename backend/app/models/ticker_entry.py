@@ -1,3 +1,6 @@
+# ----------------------------------------
+# app/models/ticker_entry.py
+# ----------------------------------------
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -21,7 +24,8 @@ class TickerEntry(Base):
     )
     minute = Column(Integer, nullable=False)
     text = Column(Text, nullable=False)
-    icon = Column(String(10), nullable=True)  # ← neu
+    icon = Column(String(10), nullable=True)
+    status = Column(String(20), default="draft", nullable=False)  # draft | published
     mode = Column(String(20), nullable=False)
     style = Column(String(20), nullable=True)
     language = Column(String(5), default="de")
@@ -36,4 +40,6 @@ class TickerEntry(Base):
     synthetic_event = relationship("SyntheticEvent", backref="ticker_entries")
 
     def __repr__(self):
-        return f"<TickerEntry(id={self.id}, mode='{self.mode}', minute={self.minute})>"
+        return (
+            f"<TickerEntry(id={self.id}, status='{self.status}', minute={self.minute})>"
+        )

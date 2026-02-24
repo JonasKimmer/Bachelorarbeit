@@ -9,8 +9,6 @@ from app.schemas.league_season import LeagueSeasonSimple
 
 
 class MatchBase(BaseModel):
-    """Basis-Schema für Match."""
-
     league_season_id: int
     home_team_id: int
     away_team_id: int
@@ -20,16 +18,12 @@ class MatchBase(BaseModel):
 
 
 class MatchCreate(MatchBase):
-    """Schema zum Erstellen eines Matches."""
-
     external_id: int | None = None
     score_home: int = 0
     score_away: int = 0
 
 
 class MatchUpdate(BaseModel):
-    """Schema zum Aktualisieren eines Matches."""
-
     league_season_id: int | None = None
     round: str | None = None
     match_date: datetime | None = None
@@ -39,27 +33,22 @@ class MatchUpdate(BaseModel):
 
 
 class Match(MatchBase):
-    """Vollständiges Match-Schema (DB → API)."""
-
     id: int
     external_id: int | None
-    score_home: int
-    score_away: int
+    score_home: int | None = None  # Fix: None erlaubt für noch nicht gespielte Matches
+    score_away: int | None = None  # Fix: None erlaubt für noch nicht gespielte Matches
     minute: int | None = None
     created_at: datetime
     updated_at: datetime | None
 
-    # Relationships
     home_team: Team
     away_team: Team
-    league_season: LeagueSeasonSimple  # ← NEU!
+    league_season: LeagueSeasonSimple
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class MatchSimple(BaseModel):
-    """Einfaches Match-Schema ohne Relationships (für Listen)."""
-
     id: int
     league_season_id: int
     home_team_id: int
@@ -67,8 +56,8 @@ class MatchSimple(BaseModel):
     match_date: datetime
     round: str | None
     status: str
-    score_home: int
-    score_away: int
+    score_home: int | None = None  # Fix: None erlaubt
+    score_away: int | None = None  # Fix: None erlaubt
     minute: int | None = None
 
     model_config = ConfigDict(from_attributes=True)

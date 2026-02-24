@@ -1,21 +1,17 @@
+# ----------------------------------------
 # app/schemas/ticker_entry.py
-"""
-Pydantic Schemas für TickerEntry-Daten.
-Validierung für generierte Liveticker-Texte.
-"""
-
-from pydantic import BaseModel, Field
+# ----------------------------------------
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 
 
 class TickerEntryBase(BaseModel):
-    """Basis-Schema mit gemeinsamen Feldern."""
-
     match_id: int
     event_id: int | None = None
     minute: int = Field(ge=0, le=120)
     text: str = Field(min_length=1)
-    icon: str | None = None  # ← neu
+    icon: str | None = None
+    status: str = Field(default="draft", pattern="^(draft|published)$")
     mode: str = Field(pattern="^(auto|hybrid|manual)$")
     style: str | None = Field(None, pattern="^(neutral|euphorisch|kritisch)$")
     language: str = Field(default="de", pattern="^(de|en|es|ja)$")
@@ -25,24 +21,18 @@ class TickerEntryBase(BaseModel):
 
 
 class TickerEntryCreate(TickerEntryBase):
-    """Schema für TickerEntry-Erstellung (POST)."""
-
     pass
 
 
 class TickerEntryUpdate(BaseModel):
-    """Schema für TickerEntry-Updates (PATCH)."""
-
     text: str | None = Field(None, min_length=1)
+    status: str | None = Field(None, pattern="^(draft|published)$")
     published_at: datetime | None = None
 
 
 class TickerEntry(TickerEntryBase):
-    """Schema für TickerEntry-Response (GET)."""
-
     id: int
     created_at: datetime
     published_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

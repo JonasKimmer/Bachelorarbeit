@@ -36,6 +36,7 @@ from app.models.match_statistic import MatchStatistic
 from app.models.lineup import Lineup
 from app.models.player_statistic import PlayerStatistic
 from app.models.synthetic_event import SyntheticEvent
+from app.models.team_league import TeamLeague
 
 
 # DB-Tabellen erstellen (falls nicht vorhanden)

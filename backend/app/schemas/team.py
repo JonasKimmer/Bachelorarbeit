@@ -1,40 +1,39 @@
-# app/schemas/team.py
-"""
-Pydantic Schemas für Team-Daten.
-Validierung und Serialisierung für API Requests/Responses.
-"""
-
-from pydantic import BaseModel, Field
+#  app/schemas/team.py
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 
 
 class TeamBase(BaseModel):
-    """Basis-Schema mit gemeinsamen Feldern."""
-
     name: str = Field(..., min_length=1, max_length=100)
+    short_name: str | None = None
+    code: str | None = None
     logo_url: str | None = None
+    country: str | None = None
+    founded: int | None = None
+    venue_name: str | None = None
+    venue_capacity: int | None = None
     external_id: int | None = None
+    is_partner: bool = False
 
 
 class TeamCreate(TeamBase):
-    """Schema für Team-Erstellung (POST)."""
-
     pass
 
 
 class TeamUpdate(BaseModel):
-    """Schema für Team-Updates (PUT/PATCH)."""
-
     name: str | None = None
+    short_name: str | None = None
+    code: str | None = None
     logo_url: str | None = None
-    external_id: int | None = None
+    country: str | None = None
+    founded: int | None = None
+    venue_name: str | None = None
+    venue_capacity: int | None = None
+    is_partner: bool | None = None
 
 
 class Team(TeamBase):
-    """Schema für Team-Response (GET)."""
-
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True  # Ermöglicht SQLAlchemy Model → Pydantic
+    model_config = ConfigDict(from_attributes=True)

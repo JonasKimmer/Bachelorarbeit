@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import "./LiveTicker.css";
 import * as api from "./api";
 import { useMatchData } from "./hooks/useMatchData";
+import { usePollingMatchdays } from "./hooks/usePollingMatchdays";
 import config from "./config/whitelabel";
 
 // ===== SUBCOMPONENTS =====
@@ -100,10 +101,8 @@ function TickerEvent({ event, tickerText, mode, generatingId, onGenerate }) {
     return event.detail;
   };
 
-  // MANUAL mode – Events ausblenden
   if (mode === "manual") return null;
 
-  // AUTO mode
   if (mode === "auto") {
     return (
       <div className={`event ${typeClass}`}>
@@ -125,7 +124,6 @@ function TickerEvent({ event, tickerText, mode, generatingId, onGenerate }) {
     );
   }
 
-  // REVIEW mode
   if (mode === "review") {
     if (tickerText && !published) {
       return (
@@ -148,7 +146,13 @@ function TickerEvent({ event, tickerText, mode, generatingId, onGenerate }) {
                 </button>
                 <button
                   className="btn-publish"
-                  onClick={() => setPublished(true)}
+                  onClick={async () => {
+                    await api.publishTicker(
+                      tickerText.id,
+                      editText || tickerText.text,
+                    );
+                    setPublished(true);
+                  }}
                 >
                   ✓ Veröffentlichen
                 </button>
@@ -322,20 +326,22 @@ function StatsPanel({ match, matchStats, playerStats, lineups, prematch }) {
 // ===== MAIN COMPONENT =====
 export default function LiveTicker() {
   const [appLoading, setAppLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("ligen");
+  const [activeTab, setActiveTab] = useState("teams");
   const [tickerMode, setTickerMode] = useState("auto");
   const [manualText, setManualText] = useState("");
   const [manualIcon, setManualIcon] = useState("📝");
   const [manualMinute, setManualMinute] = useState("");
+  const [manualError, setManualError] = useState("");
 
-  const [leagues, setLeagues] = useState([]);
-  const [leagueSeasons, setLeagueSeasons] = useState([]);
-  const [rounds, setRounds] = useState([]);
+  const [countries, setCountries] = useState([]);
+  const [teams, setTeams] = useState([]);
+  const [competitions, setCompetitions] = useState([]);
   const [matches, setMatches] = useState([]);
   const [favorites, setFavorites] = useState([]);
 
-  const [selLeagueId, setSelLeagueId] = useState(null);
-  const [selLSId, setSelLSId] = useState(null);
+  const [selCountry, setSelCountry] = useState(null);
+  const [selTeamId, setSelTeamId] = useState(null);
+  const [selCompetitionId, setSelCompetitionId] = useState(null);
   const [selRound, setSelRound] = useState(null);
   const [selMatchId, setSelMatchId] = useState(null);
   const [generatingId, setGeneratingId] = useState(null);
@@ -352,51 +358,74 @@ export default function LiveTicker() {
     reload,
   } = useMatchData(selMatchId);
 
+  // Polling Hook für Matchdays (triggert automatisch Import wenn leer)
+  const {
+    matchdays,
+    loading: matchdaysLoading,
+    error: matchdaysError,
+  } = usePollingMatchdays(selTeamId, selCompetitionId);
+
+  // selRound automatisch auf letzten Spieltag setzen sobald Matchdays geladen
+  useEffect(() => {
+    if (matchdays.length > 0) setSelRound(matchdays[matchdays.length - 1]);
+  }, [matchdays]);
+
+  // Init: Länder + Favoriten laden
   useEffect(() => {
     Promise.all([
-      api.fetchLeagues().then((r) => {
-        setLeagues(r.data);
-        if (r.data.length > 0) setSelLeagueId(r.data[0].id);
+      api.fetchCountries().then((r) => {
+        setCountries(r.data);
+        if (r.data.length > 0) setSelCountry(r.data[0]);
       }),
       api.fetchFavorites().then((r) => setFavorites(r.data)),
     ]).finally(() => setAppLoading(false));
   }, []);
 
+  // Land gewählt → Teams laden
   useEffect(() => {
-    if (!selLeagueId) return;
-    api.fetchSeasons(selLeagueId).then((r) => {
-      setLeagueSeasons(r.data);
-      const cur = r.data.find((ls) => ls.season.current) || r.data[0];
-      if (cur) setSelLSId(cur.id);
+    if (!selCountry) return;
+    setTeams([]);
+    setSelTeamId(null);
+    api.fetchTeamsByCountry(selCountry).then((r) => {
+      setTeams(r.data);
+      if (r.data.length > 0) setSelTeamId(r.data[0].id);
     });
-  }, [selLeagueId]);
+  }, [selCountry]);
 
-  const handleRoundChange = useCallback(
-    async (round, lsId = selLSId, lsList = leagueSeasons) => {
-      setSelRound(round);
-      setSelMatchId(null);
-      setMatches([]);
-      const ls = lsList.find((l) => l.id === lsId);
-      if (!ls) return;
-      try {
-        await api.importMatches(ls.league.external_id, ls.season.year, round);
-      } catch {}
-      const res = await api.fetchMatches(lsId, round);
-      setMatches(res.data);
-      if (res.data.length > 0) setSelMatchId(res.data[0].id);
-    },
-    [selLSId, leagueSeasons],
-  );
-
+  // Team gewählt → Competitions laden
   useEffect(() => {
-    if (!selLSId) return;
-    api.fetchRounds(selLSId).then((r) => {
-      setRounds(r.data);
-      if (r.data.length > 0)
-        handleRoundChange(r.data[0], selLSId, leagueSeasons);
+    if (!selTeamId) return;
+    setCompetitions([]);
+    setMatches([]);
+    setSelCompetitionId(null);
+    setSelRound(null);
+    setSelMatchId(null);
+    api.fetchTeamCompetitions(selTeamId).then((r) => {
+      setCompetitions(r.data);
+      if (r.data.length > 0) setSelCompetitionId(r.data[0].id);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selLSId]);
+  }, [selTeamId]);
+
+  // Competition gewählt → Reset (Matchdays kommen via Hook)
+  useEffect(() => {
+    if (!selCompetitionId) return;
+    setMatches([]);
+    setSelRound(null);
+    setSelMatchId(null);
+  }, [selCompetitionId]);
+
+  // Spieltag gewählt → Matches laden
+  useEffect(() => {
+    if (!selTeamId || !selCompetitionId || !selRound) return;
+    setMatches([]);
+    setSelMatchId(null);
+    api
+      .fetchTeamMatchesByMatchday(selTeamId, selCompetitionId, selRound)
+      .then((r) => {
+        setMatches(r.data);
+        if (r.data.length > 0) setSelMatchId(r.data[0].id);
+      });
+  }, [selTeamId, selCompetitionId, selRound]);
 
   const liveIntervalRef = React.useRef(null);
 
@@ -445,10 +474,32 @@ export default function LiveTicker() {
     [reload],
   );
 
-  const curLS = leagueSeasons.find((ls) => ls.id === selLSId);
-
-  // Manuelle Einträge = tickerTexts ohne event_id
+  const curCompetition = competitions.find((c) => c.id === selCompetitionId);
   const manualEntries = tickerTexts.filter((t) => !t.event_id);
+
+  const handleManualSubmit = async () => {
+    if (!manualText.trim()) return;
+    const minute = parseInt(manualMinute, 10);
+    if (!manualMinute || isNaN(minute) || minute < 1 || minute > 120) {
+      setManualError("Bitte eine gültige Minute eingeben (1–120)");
+      return;
+    }
+    setManualError("");
+    try {
+      await api.createManualTicker(
+        selMatchId,
+        manualText.trim(),
+        manualIcon,
+        minute,
+      );
+      setManualText("");
+      setManualIcon("📝");
+      setManualMinute("");
+      await reload.loadTickerTexts();
+    } catch {
+      setManualError("Fehler beim Speichern");
+    }
+  };
 
   if (appLoading) return <LoadingScreen />;
 
@@ -458,7 +509,7 @@ export default function LiveTicker() {
         <div className="lt-logo">{config.clubName}</div>
         <nav className="lt-tabs">
           {[
-            ["ligen", "🌍 Ligen"],
+            ["teams", "🏆 Teams"],
             ["heute", "📅 Heute"],
             ["live", "🔴 Live"],
             ["favoriten", "⭐ Favoriten"],
@@ -467,7 +518,7 @@ export default function LiveTicker() {
               key={tab}
               className={`lt-tab ${activeTab === tab ? "active" : ""}`}
               onClick={() =>
-                tab === "ligen" ? setActiveTab("ligen") : handleTabMatches(tab)
+                tab === "teams" ? setActiveTab("teams") : handleTabMatches(tab)
               }
             >
               {label}
@@ -476,44 +527,67 @@ export default function LiveTicker() {
         </nav>
       </header>
 
-      {activeTab === "ligen" && (
+      {activeTab === "teams" && (
         <div className="lt-nav">
           <div className="lt-select-wrap">
-            <label>Liga</label>
+            <label>Land</label>
             <select
               className="lt-select"
-              value={selLeagueId || ""}
-              onChange={(e) => setSelLeagueId(parseInt(e.target.value))}
+              value={selCountry || ""}
+              onChange={(e) => setSelCountry(e.target.value)}
             >
-              {leagues.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
+              {countries.map((c) => (
+                <option key={c} value={c}>
+                  {c}
                 </option>
               ))}
             </select>
           </div>
           <div className="lt-select-wrap">
-            <label>Saison</label>
+            <label>Team</label>
             <select
               className="lt-select"
-              value={selLSId || ""}
-              onChange={(e) => setSelLSId(parseInt(e.target.value))}
+              value={selTeamId || ""}
+              onChange={(e) => setSelTeamId(parseInt(e.target.value))}
+              disabled={teams.length === 0}
             >
-              {leagueSeasons.map((ls) => (
-                <option key={ls.id} value={ls.id}>
-                  {ls.season.year}
+              {teams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="lt-select-wrap">
+            <label>Wettbewerb</label>
+            <select
+              className="lt-select"
+              value={selCompetitionId || ""}
+              onChange={(e) => setSelCompetitionId(parseInt(e.target.value))}
+              disabled={competitions.length === 0}
+            >
+              {competitions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.league?.name} {c.season?.year}
                 </option>
               ))}
             </select>
           </div>
           <div className="lt-select-wrap">
             <label>Spieltag</label>
+            {matchdaysLoading && (
+              <span className="lt-loading">Importiere Daten...</span>
+            )}
+            {matchdaysError && (
+              <span className="lt-error">{matchdaysError}</span>
+            )}
             <select
               className="lt-select"
               value={selRound || ""}
-              onChange={(e) => handleRoundChange(e.target.value)}
+              onChange={(e) => setSelRound(e.target.value)}
+              disabled={matchdays.length === 0}
             >
-              {rounds.map((r) => (
+              {matchdays.map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>
@@ -526,6 +600,7 @@ export default function LiveTicker() {
               className="lt-select"
               value={selMatchId || ""}
               onChange={(e) => setSelMatchId(parseInt(e.target.value))}
+              disabled={matches.length === 0}
             >
               {matches.map((m) => (
                 <option key={m.id} value={m.id}>
@@ -537,7 +612,7 @@ export default function LiveTicker() {
         </div>
       )}
 
-      {activeTab !== "ligen" && (
+      {activeTab !== "teams" && (
         <div className="lt-nav">
           <div className="lt-select-wrap">
             <label>Spiel</label>
@@ -558,7 +633,7 @@ export default function LiveTicker() {
 
       <MatchHeader
         match={match}
-        leagueSeason={curLS}
+        leagueSeason={curCompetition}
         favorites={favorites}
         onToggleFav={toggleFav}
       />
@@ -619,7 +694,6 @@ export default function LiveTicker() {
               </div>
             ))}
 
-            {/* Manuelle Einträge */}
             {tickerMode === "manual" &&
               manualEntries.map((t) => (
                 <div key={`manual-${t.id}`} className="event manual">
@@ -674,13 +748,14 @@ export default function LiveTicker() {
                 <input
                   className="manual-minute"
                   type="number"
-                  min="0"
+                  min="1"
                   max="120"
                   placeholder="Min"
                   value={manualMinute}
                   onChange={(e) => setManualMinute(e.target.value)}
                 />
               </div>
+              {manualError && <div className="manual-error">{manualError}</div>}
               <textarea
                 className="manual-textarea"
                 placeholder="Ticker-Eintrag schreiben..."
@@ -688,26 +763,7 @@ export default function LiveTicker() {
                 onChange={(e) => setManualText(e.target.value)}
                 rows={2}
               />
-              <button
-                className="btn-send"
-                onClick={async () => {
-                  if (!manualText.trim()) return;
-                  try {
-                    await api.createManualTicker(
-                      selMatchId,
-                      manualText.trim(),
-                      manualIcon,
-                      manualMinute ? parseInt(manualMinute) : 0,
-                    );
-                    setManualText("");
-                    setManualIcon("📝");
-                    setManualMinute("");
-                    await reload.loadTickerTexts();
-                  } catch {
-                    alert("Fehler beim Speichern");
-                  }
-                }}
-              >
+              <button className="btn-send" onClick={handleManualSubmit}>
                 Senden
               </button>
             </div>
